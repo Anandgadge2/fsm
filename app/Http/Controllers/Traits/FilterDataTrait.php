@@ -6,27 +6,73 @@ use Illuminate\Support\Facades\DB;
 
 trait FilterDataTrait
 {
+    /**
+     * Strict dependent global filters
+     * Range → Beat → Compartment
+     */
     protected function filterData(): array
     {
-        return [
-            'ranges' => DB::table('site_details')
-                ->select('client_name')
-                ->distinct()
-                ->orderBy('client_name')
-                ->get(),
+        /* ===============================
+           RANGE (client_details ONLY)
+        =============================== */
+        $ranges = DB::table('client_details')
+            ->where('isActive', 1)
+            ->orderBy('name')
+            ->pluck('name', 'id'); // id => name
 
-            'beats' => DB::table('site_details')
-                ->select('name')
-                ->distinct()
+        /* ===============================
+           BEAT (site_details via client_id)
+        =============================== */
+        $beats = collect();
+
+        if (request()->filled('range')) {
+            $beats = DB::table('site_details')
+                ->where('client_id', request('range'))
                 ->orderBy('name')
-                ->get(),
+                ->pluck('name', 'id'); // id => name
+        }
 
-            'geofences' => DB::table('attendance')
-                ->select('geo_name')
-                ->whereNotNull('geo_name')
-                ->distinct()
-                ->orderBy('geo_name')
-                ->get(),
-        ];
+        /* ===============================
+           COMPARTMENT (site_geofences via site_id)
+        =============================== */
+        $compartments = collect();
+
+        if (request()->filled('beat')) {
+            $compartments = DB::table('site_geofences')
+                ->where('site_id', request('beat'))
+                ->orderBy('name')
+                ->pluck('name', 'id'); // id => name
+        }
+
+        return compact('ranges', 'beats', 'compartments');
     }
+
+    /**
+     * Apply filters to any query
+     */
+    protected function applyFilters($query)
+{
+    if (request()->filled('start_date')) {
+        $query->whereDate('patrol_sessions.started_at', '>=', request('start_date'));
+    }
+
+    if (request()->filled('end_date')) {
+        $query->whereDate('patrol_sessions.started_at', '<=', request('end_date'));
+    }
+
+    if (request()->filled('range')) {
+        $query->where('site_details.client_id', request('range'));
+    }
+
+    if (request()->filled('beat')) {
+        $query->where('patrol_sessions.site_id', request('beat'));
+    }
+
+    if (request()->filled('compartment')) {
+        $query->where('site_geofences.id', request('compartment'));
+    }
+
+    return $query;
+}
+
 }

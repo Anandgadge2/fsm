@@ -1,5 +1,12 @@
 <div class="sidebar">
-    <h5 class="p-3 text-center">AI Patrolling</h5>
+    
+    {{-- Sidebar Logo --}}
+<div class="sidebar-logo">
+    <img src="{{ asset('images/logo1.png') }}" alt="AI Patrolling Logo">
+</div>
+
+<h5 class="p-3 text-center sidebar-title">AI Patrolling</h5>
+
 
     {{-- MAIN DASHBOARD --}}
     <a href="/"
@@ -56,6 +63,22 @@
 
     <hr>
 
+  {{-- INCIDENTS --}}
+<div class="sidebar-section {{ request()->is('incidents*') ? 'open' : '' }}">
+    <strong class="px-3 mt-2">Incidents</strong>
+
+    <a href="/incidents/summary"
+       class="sidebar-link {{ request()->is('incidents/summary') ? 'active' : '' }}">
+        Summary
+    </a>
+
+    <a href="/incidents/explorer"
+       class="sidebar-link {{ request()->is('incidents/explorer') ? 'active' : '' }}">
+        Explorer
+    </a>
+</div>
+
+
     {{-- REPORTS --}}
     <div class="sidebar-section {{ request()->is('reports*') ? 'open' : '' }}">
         <strong class="px-3">Reports</strong>
@@ -83,6 +106,33 @@
 </div>
 
 <style>
+/* ===============================
+   SIDEBAR LOGO
+================================ */
+
+.sidebar-logo {
+    width: 100%;
+    padding: 0px;
+    background: #263526; /* slightly darker for separation */
+   
+}
+
+.sidebar-logo img {
+    width: 100%;
+    height: 92px;              /* BIG and readable */
+    object-fit: contain;
+}
+
+
+
+
+/* Sidebar title tweak */
+.sidebar-title {
+    color: #ffffff;
+    margin-bottom: 10px;
+}
+
+
    .sidebar {
     height: 100vh;
     width: 240px;

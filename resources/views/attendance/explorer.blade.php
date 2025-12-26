@@ -21,57 +21,53 @@
 
     <div class="explorer-layout">
 
-        {{-- DOT TABLE --}}
+        {{-- ================= TABLE ONLY SCROLLS ================= --}}
         <div class="dot-table-wrapper">
-            <table class="dot-table">
-                <thead>
-                    <tr>
-                        <th>User</th>
-                        <th>Range</th>
-                        <th>Beat</th>
-                        <th>Compartments</th>
-                        <th>Total Present</th>
+            <div class="dot-table-scroll">
+                <table class="dot-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Range</th>
+                            <th>Beat</th>
+                            <th>Compartment</th>
+                            <th>Total</th>
+                            @for($d = 1; $d <= $daysInMonth; $d++)
+                                <th>{{ $d }}</th>
+                            @endfor
+                        </tr>
+                    </thead>
 
-                        @for($d=1;$d<=\Carbon\Carbon::parse($startDate)->daysInMonth;$d++)
-                            <th>{{ $d }}</th>
-                        @endfor
-                    </tr>
-                </thead>
+                    <tbody>
+                    @foreach($grid as $data)
+                        @php $user = $data['user']; @endphp
+                        <tr>
+                            <td class="user-cell">
+                                <img src="{{ asset($user->profile_pic ?? 'images/user-placeholder.png') }}" class="user-avatar">
+                                <span class="user-name">{{ $user->name }}</span>
+                            </td>
 
-<tbody>
-@foreach($grid as $userId => $data)
-    @php $user = $data['user']; @endphp
+                            <td>{{ $data['meta']['range'] }}</td>
+                            <td>{{ $data['meta']['beat'] }}</td>
+                            <td>{{ $data['meta']['compartment'] }}</td>
 
-    <tr>
-        <td class="user-cell">
-            <img src="{{ asset($user->profile_pic ?? 'images/user-placeholder.png') }}"
-                 class="user-avatar">
-            <span class="user-name">{{ $user->user_name }}</span>
-        </td>
+                            <td class="fw-semibold">
+                                {{ $data['summary']['present'] }} / {{ $data['summary']['total'] }}
+                            </td>
 
-       <td>{{ $data['meta']['range'] ?? '-' }}</td>
-<td>{{ $data['meta']['beat'] ?? '-' }}</td>
-<td>{{ $data['meta']['compartment'] ?? '-' }}</td>
-
-
-        <td class="fw-semibold text-center">
-            {{ $data['summary']['present'] }} / {{ $data['summary']['total'] }}
-        </td>
-
-        @for($d = 1; $d <= $data['summary']['total']; $d++)
-            <td>
-                <span class="dot {{ $data['days'][$d]['present'] ? 'present' : 'absent' }}"></span>
-            </td>
-        @endfor
-    </tr>
-@endforeach
-</tbody>
-
-
-            </table>
+                            @for($d = 1; $d <= $daysInMonth; $d++)
+                                <td>
+                                    <span class="dot {{ $data['days'][$d]['present'] ? 'present' : 'absent' }}"></span>
+                                </td>
+                            @endfor
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        {{-- KPI PANEL --}}
+        {{-- ================= KPI PANEL ================= --}}
         <div class="kpi-panel">
             <div class="kpi kpi-green">
                 <p>Present %</p>
@@ -98,6 +94,7 @@
 </div>
 
 @endsection
+
 
 
 {{-- STYLES --}}
@@ -283,8 +280,8 @@ TABLE BASE
     display: inline-block;
 }
 
-.dot.present { background: #4caf50; }
-.dot.absent  { background: #e53935; }
+.dot.present { background: #30a034; }
+.dot.absent  { background: #ffb1af; }
 .dot.empty   { background: #dcdcdc; }
 
 /* KPI Panel */
@@ -343,5 +340,8 @@ font-weight: 600;
     color: #424242;
 }
 
-
+@keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
 </style>

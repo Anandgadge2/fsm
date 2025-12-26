@@ -1,0 +1,176 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Traits\FilterDataTrait;
+
+class IncidentController extends Controller
+{
+    use FilterDataTrait;
+
+    /* ================= INCIDENT SUMMARY ================= */
+    public function summary(Request $request)
+    {
+        $base = DB::table('patrol_logs')
+            ->join('patrol_sessions','patrol_sessions.id','=','patrol_logs.patrol_session_id')
+            ->leftJoin('users','users.id','=','patrol_sessions.user_id')
+            ->leftJoin('site_geofences','site_geofences.site_id','=','patrol_sessions.site_id')
+            ->whereIn('patrol_logs.type', [
+                'animal_sighting',
+                'water_source',
+                'human_impact',
+                'animal_mortality'
+            ]);
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $base->whereBetween('patrol_logs.created_at', [
+                $request->start_date.' 00:00:00',
+                $request->end_date.' 23:59:59'
+            ]);
+        }
+
+        /* KPIs */
+        $kpis = [
+            'total_incidents'  => (clone $base)->count(),
+            'animal_sightings' => (clone $base)->where('patrol_logs.type','animal_sighting')->count(),
+            'human_impact'     => (clone $base)->where('patrol_logs.type','human_impact')->count(),
+            'water_sources'    => (clone $base)->where('patrol_logs.type','water_source')->count(),
+            'mortality'        => (clone $base)->where('patrol_logs.type','animal_mortality')->count(),
+        ];
+
+        $typeStats = (clone $base)
+            ->selectRaw('patrol_logs.type, COUNT(*) as total')
+            ->groupBy('patrol_logs.type')
+            ->get();
+
+        $densityBySite = (clone $base)
+            ->whereNotNull('site_geofences.site_name')
+            ->selectRaw('site_geofences.site_name, COUNT(*) as incidents')
+            ->groupBy('site_geofences.site_name')
+            ->orderByDesc('incidents')
+            ->limit(10)
+            ->get();
+
+        $repeatZones = (clone $base)
+            ->whereNotNull('site_geofences.site_name')
+            ->selectRaw('
+                site_geofences.client_id as range_id,
+                patrol_sessions.site_id as beat_id,
+                site_geofences.site_name as compartment,
+                site_geofences.lat,
+                site_geofences.lng,
+                COUNT(*) as incidents
+            ')
+            ->groupBy(
+                'site_geofences.client_id',
+                'patrol_sessions.site_id',
+                'site_geofences.site_name',
+                'site_geofences.lat',
+                'site_geofences.lng'
+            )
+            ->having('incidents','>=',3)
+            ->orderByDesc('incidents')
+            ->paginate(10);
+
+        $heatmap = (clone $base)
+            ->whereNotNull('patrol_logs.lat')
+            ->whereNotNull('patrol_logs.lng')
+            ->select('patrol_logs.lat','patrol_logs.lng','patrol_logs.type')
+            ->get();
+
+        return view('incidents.summary', array_merge(
+            $this->filterData(),
+            compact('kpis','typeStats','densityBySite','repeatZones','heatmap')
+        ));
+    }
+
+    /* ================= INCIDENT EXPLORER ================= */
+    public function explorer(Request $request)
+    {
+        $base = DB::table('patrol_logs')
+            ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
+            ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
+            ->leftJoin('site_geofences', 'site_geofences.site_id', '=', 'patrol_sessions.site_id')
+            ->whereIn('patrol_logs.type', [
+                'animal_sighting',
+                'water_source',
+                'human_impact',
+                'animal_mortality'
+            ]);
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $base->whereBetween('patrol_logs.created_at', [
+                $request->start_date.' 00:00:00',
+                $request->end_date.' 23:59:59'
+            ]);
+        }
+
+        /* ALL INCIDENTS */
+        $incidents = (clone $base)
+            ->selectRaw('
+                patrol_logs.id,
+                patrol_logs.type,
+                patrol_logs.payload,
+                patrol_logs.notes,
+                patrol_logs.created_at,
+                users.name as guard,
+                site_geofences.client_id as range_id,
+                patrol_sessions.site_id as beat_id,
+                site_geofences.site_name as compartment,
+                patrol_sessions.session,
+                CASE
+                    WHEN patrol_logs.type = "animal_mortality" THEN 5
+                    WHEN patrol_logs.type = "human_impact" THEN 4
+                    WHEN patrol_logs.type = "animal_sighting" THEN 3
+                    WHEN patrol_logs.type = "water_source" THEN 2
+                    ELSE 1
+                END as severity
+            ')
+            ->orderByDesc('patrol_logs.created_at')
+            ->orderByDesc('patrol_logs.id')
+            ->paginate(25)
+            ->withQueryString();
+
+        /* LATEST 10 */
+        $latestTop10 = (clone $base)
+            ->selectRaw('
+                patrol_logs.id,
+                patrol_logs.type,
+                users.name as guard,
+                site_geofences.client_id as range_id,
+                patrol_sessions.site_id as beat_id,
+                site_geofences.site_name as compartment,
+                patrol_logs.notes,
+                patrol_logs.payload,
+                patrol_logs.created_at,
+                CASE
+                    WHEN patrol_logs.type = "animal_mortality" THEN 5
+                    WHEN patrol_logs.type = "human_impact" THEN 4
+                    WHEN patrol_logs.type = "animal_sighting" THEN 3
+                    WHEN patrol_logs.type = "water_source" THEN 2
+                    ELSE 1
+                END as severity
+            ')
+            ->orderByDesc('patrol_logs.created_at')
+            ->orderByDesc('patrol_logs.id')
+            ->limit(10)
+            ->get();
+
+        $typeStats = (clone $base)
+            ->selectRaw('patrol_logs.type, COUNT(*) as total')
+            ->groupBy('patrol_logs.type')
+            ->get();
+
+        $sessionStats = (clone $base)
+            ->selectRaw('patrol_sessions.session, COUNT(*) as total')
+            ->groupBy('patrol_sessions.session')
+            ->get();
+
+        return view('incidents.explorer', array_merge(
+            $this->filterData(),
+            compact('incidents','latestTop10','typeStats','sessionStats')
+        ));
+    }
+}
