@@ -214,6 +214,10 @@
     z-index: 50;
 }
 
+th{
+    cursor: pointer;
+}
+
 .btn-loader {
     width: 16px;
     height: 16px;
@@ -257,6 +261,7 @@ body::after {
     z-index: 1;
 }
 
+
 /* Content always above backgrounds */
 .container,
 .container-fluid,
@@ -265,6 +270,42 @@ body::after {
     position: relative;
     z-index: 5;
 }
+
+
+
+<style>
+/* ===============================
+   SORTABLE TABLE HEADERS
+================================ */
+.smart-sort th {
+    cursor: pointer;
+    position: relative;
+    padding-right: 22px;
+    user-select: none;
+}
+
+/* Default arrows */
+.smart-sort th::after {
+    content: "";
+    position: absolute;
+    right: 8px;
+    font-size: 11px;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+/* Ascending */
+.smart-sort th.sort-asc::after {
+    content: "↑";
+    opacity: 1;
+}
+
+/* Descending */
+.smart-sort th.sort-desc::after {
+    content: "↓";
+    opacity: 1;
+}
+</style>
 
     </style>
 </head>
@@ -282,95 +323,164 @@ body::after {
     @yield('content')
 </div>
 @stack('scripts')
+{{-- <script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const range = document.getElementById('rangeSelect');
+    const beat = document.getElementById('beatSelect');
+    const compartment = document.getElementById('compartmentSelect');
+
+    async function loadBeats(rangeId = '') {
+        beat.innerHTML = '<option>Loading beats…</option>';
+        const res = await fetch(`/filters/beats/${rangeId || 'all'}`);
+        const data = await res.json();
+
+        beat.innerHTML = '<option value="">All Beats</option>';
+        data.forEach(b => {
+            beat.innerHTML += `<option value="${b.id}">${b.name}</option>`;
+        });
+    }
+
+    async function loadCompartments(beatId = '') {
+        compartment.innerHTML = '<option>Loading compartments…</option>';
+        const res = await fetch(`/filters/compartments/${beatId || 'all'}`);
+        const data = await res.json();
+
+        compartment.innerHTML = '<option value="">All Compartments</option>';
+        data.forEach(c => {
+            compartment.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+        });
+    }
+
+    range.addEventListener('change', () => {
+        loadBeats(range.value);
+        loadCompartments(); // reset to all
+    });
+
+    beat.addEventListener('change', () => {
+        loadCompartments(beat.value);
+    });
+
+    // Initial load
+    loadBeats(range.value);
+    loadCompartments(beat.value);
+});
+</script> --}}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
 
-    const rangeSelect = document.getElementById('rangeSelect');
-    const beatSelect = document.getElementById('beatSelect');
-    const compartmentSelect = document.getElementById('compartmentSelect');
-    const form = document.getElementById('globalFilterForm');
+    const range = document.getElementById('rangeSelect');
+    const beat = document.getElementById('beatSelect');
+    const compartment = document.getElementById('compartmentSelect');
 
-    function resetBeats() {
-        beatSelect.innerHTML = `<option value="">All Beats</option>`;
-        beatSelect.disabled = true;
+    function resetSelect(select, label) {
+        select.innerHTML = `<option value="">All ${label}</option>`;
+        select.disabled = true;
     }
 
-    function resetCompartments() {
-        compartmentSelect.innerHTML = `<option value="">All Compartments</option>`;
-        compartmentSelect.disabled = true;
-    }
+    resetSelect(beat, 'Beats');
+    resetSelect(compartment, 'Compartments');
 
-    /* ===============================
-       RANGE → BEATS
-    =============================== */
-    rangeSelect.addEventListener('change', async () => {
+    if (range.value) loadBeats(range.value);
 
-        const rangeId = rangeSelect.value;
+    range.addEventListener('change', () => {
+        resetSelect(beat, 'Beats');
+        resetSelect(compartment, 'Compartments');
 
-        resetBeats();
-        resetCompartments();
-
-        // 🚨 IMPORTANT: stop here for "All Ranges"
-        if (!rangeId) {
-            return;
-        }
-
-        beatSelect.disabled = true;
-        beatSelect.innerHTML = `<option>Loading beats...</option>`;
-
-        try {
-            const res = await fetch(`/filters/beats/${rangeId}`);
-            const data = await res.json();
-
-            beatSelect.innerHTML = `<option value="">All Beats</option>`;
-
-            data.forEach(b => {
-                beatSelect.innerHTML += `<option value="${b.id}">${b.name}</option>`;
-            });
-
-            beatSelect.disabled = false;
-
-        } catch (e) {
-            beatSelect.innerHTML = `<option value="">All Beats</option>`;
-            beatSelect.disabled = true;
-            console.error(e);
+        if (range.value) {
+            loadBeats(range.value);
         }
     });
 
-    /* ===============================
-       BEAT → COMPARTMENTS
-    =============================== */
-    beatSelect.addEventListener('change', async () => {
+    beat.addEventListener('change', () => {
+        resetSelect(compartment, 'Compartments');
 
-        const beatId = beatSelect.value;
-
-        resetCompartments();
-
-        // 🚨 stop if "All Beats"
-        if (!beatId) {
-            return;
+        if (beat.value) {
+            loadCompartments(beat.value);
         }
+    });
 
-        compartmentSelect.disabled = true;
-        compartmentSelect.innerHTML = `<option>Loading compartments...</option>`;
+    function loadBeats(rangeId) {
+        beat.disabled = true;
+        fetch(`/filters/beats/${rangeId}`)
+            .then(res => res.json())
+            .then(data => {
+                data.forEach(b => {
+                    beat.insertAdjacentHTML(
+                        'beforeend',
+                        `<option value="${b.id}">${b.name}</option>`
+                    );
+                });
+                beat.disabled = false;
+            });
+    }
 
-        try {
-            const res = await fetch(`/filters/compartments/${beatId}`);
-            const data = await res.json();
+    function loadCompartments(beatId) {
+        compartment.disabled = true;
+        fetch(`/filters/compartments/${beatId}`)
+            .then(res => res.json())
+            .then(data => {
+                data.forEach(c => {
+                    compartment.insertAdjacentHTML(
+                        'beforeend',
+                        `<option value="${c.id}">${c.name}</option>`
+                    );
+                });
+                compartment.disabled = false;
+            });
+    }
+});
+</script>
 
-            compartmentSelect.innerHTML = `<option value="">All Compartments</option>`;
 
-            data.forEach(c => {
-                compartmentSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    document.querySelectorAll('.smart-sort').forEach(table => {
+
+        const headers = table.querySelectorAll('th');
+        const tbody = table.querySelector('tbody');
+
+        headers.forEach((header, colIndex) => {
+
+            let direction = null; // null → desc → asc
+
+            header.addEventListener('click', () => {
+
+                // Reset arrows on other headers
+                headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                const isNumber =
+                    header.dataset.type === 'number' ||
+                    rows.every(row => !isNaN(row.children[colIndex]?.innerText.trim()));
+
+                // Toggle direction
+                direction = direction === 'desc' ? 'asc' : 'desc';
+                header.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+
+                rows.sort((a, b) => {
+                    let A = a.children[colIndex]?.innerText.trim() ?? '';
+                    let B = b.children[colIndex]?.innerText.trim() ?? '';
+
+                    if (isNumber) {
+                        A = parseFloat(A) || 0;
+                        B = parseFloat(B) || 0;
+                        return direction === 'asc' ? A - B : B - A;
+                    } else {
+                        return direction === 'asc'
+                            ? A.localeCompare(B)
+                            : B.localeCompare(A);
+                    }
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
             });
 
-            compartmentSelect.disabled = false;
+        });
 
-        } catch (e) {
-            compartmentSelect.innerHTML = `<option value="">All Compartments</option>`;
-            compartmentSelect.disabled = true;
-            console.error(e);
-        }
     });
 
 });

@@ -55,11 +55,11 @@
             <div class="card-header text-center fw-semibold">
                 Top 10 Attendance
             </div>
-            <table class="table table-bordered table-hover table-sm text-center mb-0">
+            <table class="table table-bordered table-hover table-sm text-center mb-0 smart-sort">
                 <thead class="table-light">
                     <tr>
                         <th>Guard</th>
-                        <th>Days Present</th>
+                        <th data-type="number">Days Present</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -79,11 +79,11 @@
             <div class="card-header text-center fw-semibold">
                 Top 10 Defaulters
             </div>
-            <table class="table table-bordered table-hover table-sm text-center mb-0">
+            <table class="table table-bordered table-hover table-sm text-center mb-0 smart-sort">
                 <thead class="table-light">
                     <tr>
                         <th>Guard</th>
-                        <th>Days Present</th>
+                        <th data-type="number">Days Present</th>
                     </tr>
                 </thead>
                 <tbody>

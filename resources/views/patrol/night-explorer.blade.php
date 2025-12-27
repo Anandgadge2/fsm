@@ -25,7 +25,7 @@
     <h6 class="fw-bold mb-2">Night Patrol Sessions</h6>
 
     <div class="table-responsive">
-        <table class="table table-striped align-middle">
+        <table class="table table-striped align-middle smart-sort">
             <thead class="table-light">
             <tr>
                 <th>Guard</th>

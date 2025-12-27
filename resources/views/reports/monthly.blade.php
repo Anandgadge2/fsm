@@ -56,7 +56,7 @@
 <div class="card">
     <div class="card-header fw-semibold">Month-wise Summary</div>
     <div class="table-responsive">
-        <table class="table table-striped mb-0">
+        <table class="table table-striped mb-0 smart-sort">
             <thead class="table-light">
                 <tr>
                     <th>Month</th>

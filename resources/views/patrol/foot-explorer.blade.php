@@ -18,7 +18,7 @@
     <h5 class="mb-3">Foot Patrol Explorer</h5>
 
     <div class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-hover align-middle smart-sort">
             <thead class="table-light">
                 <tr>
                     <th>User</th>

@@ -6,7 +6,7 @@
 
 {{-- ================= TABLE ================= --}}
 <div class="card p-3 mb-4">
-    <table class="table table-bordered align-middle">
+    <table class="table table-bordered align-middle smart-sort">
         <thead class="table-light">
             <tr>
                 <th>Guard</th>

@@ -36,7 +36,7 @@
 
 <div class="card">
     <div class="card-header fw-semibold">Active Guards</div>
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 smart-sort">
         <thead class="table-light">
             <tr>
                 <th>Name</th>

@@ -34,7 +34,7 @@
 <div class="card p-3 mb-4">
     <h6 class="fw-bold mb-2">Guard-wise Night Patrol Summary</h6>
     <div class="table-responsive">
-        <table class="table table-bordered align-middle">
+        <table class="table table-bordered align-middle smart-sort">
             <thead class="table-light">
                 <tr>
                     <th>Guard</th>

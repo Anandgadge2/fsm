@@ -71,7 +71,7 @@
         <div class="card p-2">
             <h6 class="fw-bold">Patrolling Details</h6>
             <div style="max-height:650px; overflow:auto;">
-                <table class="table table-sm">
+                <table class="table table-sm smart-sort">
                     <thead>
                         <tr>
                             <th>Name</th>

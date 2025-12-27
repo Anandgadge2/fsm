@@ -7,6 +7,7 @@ use App\Http\Controllers\PatrolController;
 use App\Http\Controllers\PatrolAnalyticsController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\IncidentController;
+use App\Http\Controllers\FilterController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -40,8 +41,10 @@ Route::prefix('reports')->group(function () {
 });
 
 
-Route::get('/filters/beats/{range}', [App\Http\Controllers\FilterController::class, 'beats']);
-Route::get('/filters/compartments/{beat}', [App\Http\Controllers\FilterController::class, 'compartments']);
+// Route::get('/filters/beats/{range}', [App\Http\Controllers\FilterController::class, 'beats']);
+// Route::get('/filters/compartments/{beat}', [App\Http\Controllers\FilterController::class, 'compartments']);
+Route::get('/filters/beats/{range}', [FilterController::class, 'beats']);
+Route::get('/filters/compartments/{beat}', [FilterController::class, 'compartments']);
 
 
     Route::prefix('incidents')->group(function () {

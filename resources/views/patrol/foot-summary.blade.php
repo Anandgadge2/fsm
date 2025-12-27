@@ -36,10 +36,10 @@
 <h5 class="mt-4 mb-2 fw-bold">Guard-wise Patrol Summary</h5>
 
 <div class="table-responsive">
-<table class="table table-bordered align-middle">
-<thead class="table-light">
-<tr>
-<th>Guard</th>
+<table class="table table-bordered align-middle smart-sort">
+<thead class="table-light ">
+<tr >
+<th class="cursor-pointer">Guard</th>
 <th>Sessions</th>
 <th>Completed</th>
 <th>Ongoing</th>

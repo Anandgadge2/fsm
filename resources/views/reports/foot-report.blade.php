@@ -34,7 +34,7 @@
 <div class="card">
     <div class="card-header fw-semibold">Guard Performance</div>
     <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover mb-0 smart-sort">
             <thead class="table-light">
                 <tr>
                     <th>Guard</th>

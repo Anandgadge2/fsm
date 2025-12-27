@@ -25,14 +25,14 @@
     <div class="card-header fw-semibold">Latest 10 Incidents</div>
 
     <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
+        <table class="table table-sm align-middle mb-0 smart-sort">
             <thead class="table-light">
             <tr>
                 <th>Type</th>
-                <th>Severity</th>
+                <th data-type="number">Severity</th>
                 <th>Guard</th>
-                <th>Range</th>
-                <th>Beat</th>
+                <th data-type="number">Range</th>
+                <th data-type="number">Beat</th>
                 <th>Compartment</th>
                 <th>Date</th>
             </tr>
@@ -84,8 +84,8 @@
     <div class="card-header fw-semibold">All Incidents</div>
 
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+        <table class="table table-hover align-middle mb-0 smart-sort">
+            <thead class="table-light ">
             <tr>
                 <th>Type</th>
                 <th>Severity</th>

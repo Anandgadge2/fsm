@@ -25,7 +25,7 @@
 <h6 class="fw-bold mb-2">Repeat Incident Zones (≥ 3 Incidents)</h6>
 
 <div class="table-responsive">
-<table class="table table-sm table-hover align-middle">
+<table class="table table-sm table-hover align-middle smart-sort">
 <thead class="table-light">
 <tr>
     <th>#</th>

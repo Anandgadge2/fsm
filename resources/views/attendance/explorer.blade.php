@@ -24,7 +24,7 @@
         {{-- ================= TABLE ONLY SCROLLS ================= --}}
         <div class="dot-table-wrapper">
             <div class="dot-table-scroll">
-                <table class="dot-table">
+                <table class="dot-table smart-sort">
                     <thead>
                         <tr>
                             <th>User</th>
@@ -33,7 +33,7 @@
                             <th>Compartment</th>
                             <th>Total</th>
                             @for($d = 1; $d <= $daysInMonth; $d++)
-                                <th>{{ $d }}</th>
+                                <th data-type="number">{{ $d }}</th>
                             @endfor
                         </tr>
                     </thead>
@@ -47,9 +47,10 @@
                                 <span class="user-name">{{ $user->name }}</span>
                             </td>
 
-                            <td>{{ $data['meta']['range'] }}</td>
-                            <td>{{ $data['meta']['beat'] }}</td>
-                            <td>{{ $data['meta']['compartment'] }}</td>
+                           <td>{{ $data['meta']['range'] ?? '-' }}</td>
+                           <td>{{ $data['meta']['beat'] ?? '-' }}</td>
+                           <td>{{ $data['meta']['compartment'] ?? '-' }}</td>
+
 
                             <td class="fw-semibold">
                                 {{ $data['summary']['present'] }} / {{ $data['summary']['total'] }}

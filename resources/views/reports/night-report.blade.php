@@ -36,7 +36,7 @@
 
 <div class="card">
     <div class="card-header fw-semibold">Top Guards (Night)</div>
-    <table class="table table-striped mb-0">
+    <table class="table table-striped mb-0 smart-sort">
         <thead class="table-light">
             <tr>
                 <th>Guard</th>
