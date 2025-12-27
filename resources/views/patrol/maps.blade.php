@@ -2,134 +2,137 @@
 
 @section('content')
 
-{{-- FILTER BAR --}}
-<form method="GET" class="card p-3 mb-3">
-    <div class="row g-2 align-items-end">
-        <div class="col-md-2">
-            <label>Date From</label>
-            <input type="date" name="from" class="form-control" value="{{ request('from') }}">
-        </div>
-        <div class="col-md-2">
-            <label>Date To</label>
-            <input type="date" name="to" class="form-control" value="{{ request('to') }}">
-        </div>
-        <div class="col-md-3">
-            <label>Range</label>
-            <select name="range" class="form-select">
-                <option value="">All Ranges</option>
-                @foreach($ranges as $r)
-                    <option value="{{ $r }}" @selected(request('range')==$r)>
-                        {{ $r }}
-                    </option>
-                @endforeach
-            </select>
-        </div>
-        <div class="col-md-2">
-            <button class="btn btn-success w-100">Apply</button>
-        </div>
-    </div>
-</form>
- {{-- KPI STATS --}}
-{{-- KPI TILES --}}
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card p-3 text-center h-100">
-            <small class="text-muted">Total Guards</small>
-            <h4 class="fw-bold">{{ $stats['total_guards'] }}</h4>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card p-3 text-center h-100">
-            <small class="text-muted">Active Patrols</small>
-            <h4 class="fw-bold">{{ $stats['active_patrols'] }}</h4>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card p-3 text-center h-100">
-            <small class="text-muted">Completed Patrols</small>
-            <h4 class="fw-bold">{{ $stats['completed_patrols'] }}</h4>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card p-3 text-center h-100">
-            <small class="text-muted">Distance (KM)</small>
-            <h4 class="fw-bold">{{ $stats['total_distance_km'] }}</h4>
-        </div>
-    </div>
+{{-- KPIs --}}
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card kpi-card">Total Guards<br><strong>{{ $stats['total_guards'] }}</strong></div></div>
+    <div class="col-md-3"><div class="card kpi-card">Active Patrols<br><strong>{{ $stats['active_patrols'] }}</strong></div></div>
+    <div class="col-md-3"><div class="card kpi-card">Completed Patrols<br><strong>{{ $stats['completed_patrols'] }}</strong></div></div>
+    <div class="col-md-3"><div class="card kpi-card">Distance (KM)<br><strong>{{ $stats['total_distance_km'] }}</strong></div></div>
 </div>
 
-{{-- MAP + DETAILS --}}
 <div class="row g-3">
-    <div class="col-md-9">
+    <div class="col-md-9 position-relative">
         <div class="card p-2">
-            <h6 class="fw-bold mb-2">Patrol Movement Map</h6>
+            <h6 class="fw-bold mb-2">Patrol & Geo-Fence Map</h6>
+
+            <div class="map-controls">
+                <button id="showAllBtn" class="btn btn-sm btn-outline-secondary">Show All</button>
+                <button id="playbackBtn" class="btn btn-sm btn-outline-primary">Playback</button>
+            </div>
+
             <div id="map" style="height:650px;"></div>
         </div>
     </div>
 
     <div class="col-md-3">
-        <div class="card p-2">
-            <h6 class="fw-bold">Patrolling Details</h6>
-            <div style="max-height:650px; overflow:auto;">
-                <table class="table table-sm smart-sort">
+        <div class="card p-2 h-100">
+            <h6 class="fw-bold mb-2">Guards</h6>
+
+            <div style="max-height:620px;overflow:auto;">
+                <table class="table table-sm table-hover">
                     <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Designation</th>
-                        </tr>
+                        <tr><th>User</th><th>Designation</th></tr>
                     </thead>
                     <tbody>
                         @foreach($guards as $g)
-                            <tr>
-                                <td>{{ $g->name }}</td>
-                                <td>{{ $g->designation }}</td>
-                            </tr>
+                        <tr class="guard-row" data-user="{{ $g->id }}">
+                            <td>{{ $g->name }}</td>
+                            <td class="text-muted">{{ $g->designation }}</td>
+                        </tr>
                         @endforeach
                     </tbody>
                 </table>
+
+                {{ $guards->links() }}
             </div>
         </div>
     </div>
 </div>
 
-
-
-{{-- MAP SCRIPT --}}
 <script>
-const map = L.map('map').setView([22.5, 78.5], 7);
+const map = L.map('map',{dragging:false,scrollWheelZoom:false}).setView([22.5,78.5],7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-/* Base layer */
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18
-}).addTo(map);
+document.addEventListener('keydown',e=>{ if(e.ctrlKey){map.dragging.enable();map.scrollWheelZoom.enable();}});
+document.addEventListener('keyup',()=>{ map.dragging.disable();map.scrollWheelZoom.disable();});
 
-/* ===== SITE MARKERS ===== */
-@foreach($sites as $s)
-    L.circleMarker(
-        [{{ $s->lat }}, {{ $s->lng }}],
-        {
-            radius: 6,
-            color: '#1e88e5',
-            fillColor: '#1e88e5',
-            fillOpacity: 0.9
-        }
-    ).bindPopup(`
-        <strong>{{ $s->site_name }}</strong><br>
-        Type: {{ $s->type }}
-    `).addTo(map);
+map.createPane('fencePane'); map.getPane('fencePane').style.zIndex=200;
+map.createPane('pathPane');  map.getPane('pathPane').style.zIndex=400;
+
+/* Geo-fences */
+@foreach($geofences as $g)
+@if($g->type==='Circle')
+L.circle([{{ $g->lat }},{{ $g->lng }}],{
+    pane:'fencePane',radius:{{ $g->radius }},
+    color:'#6a1b9a',fillOpacity:0.07
+}).addTo(map).bindPopup('{{ $g->site_name }}');
+@elseif($g->poly_lat_lng)
+L.polygon(
+    JSON.parse(@json($g->poly_lat_lng)).map(p=>[p.lat,p.lng]),
+    {pane:'fencePane',color:'#6a1b9a',fillOpacity:0.07}
+).addTo(map).bindPopup('{{ $g->site_name }}');
+@endif
 @endforeach
 
-/* ===== PATROL PATHS ===== */
-@foreach($paths as $p)
-    try {
-        const geo = JSON.parse(@json($p->path_geojson));
-        L.geoJSON(geo, {
-            color: "{{ $p->session === 'Foot' ? '#2e7d32' : '#fb8c00' }}",
-            weight: 3
-        }).addTo(map);
-    } catch (e) {}
+/* Path storage */
+const pathsByUser = {};
+const sessionColors = { Foot:'#2e7d32', Vehicle:'#fb8c00', Bicycle:'#1565c0', Other:'#6d4c41' };
+
+@foreach($paths as $uid=>$rows)
+pathsByUser[{{ $uid }}] = [];
+@foreach($rows as $r)
+try{
+    const geo = JSON.parse(@json($r->path_geojson));
+    const layer = L.geoJSON(geo,{
+        pane:'pathPane',
+        color: sessionColors['{{ $r->session }}'] || '#999',
+        weight:4
+    });
+    pathsByUser[{{ $uid }}].push(layer);
+}catch(e){}
 @endforeach
+@endforeach
+
+let activeLayers = [];
+let activeUser = null;
+
+function clearPaths(){
+    activeLayers.forEach(l=>map.removeLayer(l));
+    activeLayers=[];
+}
+
+/* Guard click */
+document.querySelectorAll('.guard-row').forEach(row=>{
+row.onclick=()=>{
+    clearPaths();
+    activeUser = row.dataset.user;
+
+    if(pathsByUser[activeUser]){
+        pathsByUser[activeUser].forEach(l=>{
+            l.addTo(map);
+            activeLayers.push(l);
+        });
+        map.fitBounds(L.featureGroup(activeLayers).getBounds(),{padding:[40,40]});
+    }
+};
+});
+
+/* Show all */
+document.getElementById('showAllBtn').onclick=()=>{
+    clearPaths();
+    Object.values(pathsByUser).flat().forEach(l=>{
+        l.addTo(map);
+        activeLayers.push(l);
+    });
+};
+
+/* Playback */
+document.getElementById('playbackBtn').onclick=()=>{
+    if(!activeLayers.length) return alert('Select a guard first');
+    activeLayers.forEach(l=>{
+        l.eachLayer(pl=>{ if(pl.snakeIn) pl.snakeIn(); });
+    });
+};
 </script>
-
 
 @endsection

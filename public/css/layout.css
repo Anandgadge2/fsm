@@ -1,0 +1,111 @@
+/* ===============================
+   BASE LAYOUT
+================================ */
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #f6f8f7;
+}
+
+/* Main content area */
+.content {
+    margin-left: 260px; /* sidebar width */
+    padding: 20px;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    z-index: 10;
+}
+
+/* ===============================
+   GLOBAL BACKGROUND THEME
+================================ */
+
+/* Base layer */
+.nature-bg {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 420px;
+    pointer-events: none;
+    opacity: 0.5;
+    background-repeat: no-repeat;
+    background-size: contain;
+    z-index: 0;
+}
+
+/* Left background */
+.left-bg {
+    position: absolute;
+    left: 240px;
+    bottom: 0;
+    width: calc(100% - 240px);
+    height: 120vh;
+    background-image: url('/images/1.png');
+    background-repeat: no-repeat;
+    background-position: bottom center;
+    background-size: cover;
+    filter: brightness(0.5) contrast(1.2);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Right background */
+.right-bg {
+    position: absolute;
+    left: 100px;
+    top: -290px;
+    background-image: url('/images/3.png');
+    background-position: top right 40px;
+    background-size: 120%;
+    transform: rotate(60deg);
+    filter: brightness(0.7) contrast(1.1);
+}
+
+/* Soft vignette */
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(255,255,255,0) 55%,
+        rgba(246,248,247,0.85) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ===============================
+   GLOBAL UTILITIES
+================================ */
+
+.sticky-filter {
+    position: sticky;
+    top: 12px;
+    z-index: 50;
+}
+
+.btn-loader {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Ensure content stays above background */
+.container,
+.container-fluid,
+.content,
+.dashboard-grid {
+    position: relative;
+    z-index: 5;
+}

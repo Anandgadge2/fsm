@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 use App\Http\Controllers\Traits\FilterDataTrait;
 
 class PatrolController extends Controller
@@ -27,15 +29,12 @@ class PatrolController extends Controller
             $request->end_date . ' 23:59:59'
         ]);
     }
-
     if ($request->filled('range')) {
         $base->where('site_details.client_name', $request->range);
     }
-
     if ($request->filled('beat')) {
         $base->where('site_details.name', $request->beat);
     }
-
     /* KPIs */
     $totalSessions = (clone $base)->count();
     $completed     = (clone $base)->whereNotNull('patrol_sessions.ended_at')->count();
@@ -46,8 +45,6 @@ $totalDistance = round(
         ->sum('patrol_sessions.distance') / 1000,
     2
 );
-
-
     /* Guard-wise summary (paginated) */
     $guardStats = (clone $base)
         ->groupBy('users.id', 'users.name')
@@ -56,21 +53,12 @@ $totalDistance = round(
             COUNT(*) as total_sessions,
             SUM(patrol_sessions.ended_at IS NOT NULL) as completed,
             SUM(patrol_sessions.ended_at IS NULL) as ongoing,
-            
-           ROUND(SUM(patrol_sessions.distance) / 1000, 2) as total_distance,
-ROUND(
+            ROUND(SUM(patrol_sessions.distance) / 1000, 2) as total_distance,ROUND(
     (SUM(patrol_sessions.distance) / 1000) /
-    NULLIF(SUM(TIMESTAMPDIFF(MINUTE, patrol_sessions.started_at, patrol_sessions.ended_at)) / 60, 0),
-2) as km_per_hour
-
-        ')
+    NULLIF(SUM(TIMESTAMPDIFF(MINUTE, patrol_sessions.started_at, patrol_sessions.ended_at)) / 60, 0),2) as km_per_hour')
         ->orderByDesc('total_distance')
         ->paginate(20)
         ->withQueryString();
-
-    /* Top 10 guards */
-    $topGuards = collect($guardStats->items())->take(10);
-
     /* Range-wise distance (FIXED alias) */
    $rangeStats = (clone $base)
     ->whereNotNull('site_details.client_name')
@@ -85,9 +73,6 @@ ROUND(
     ->orderByDesc('distance')
     ->get();
 
-
-
-
     /* Daily trend (last 30 days) */
     $dailyTrend = (clone $base)
     ->whereNotNull('patrol_sessions.ended_at')
@@ -100,13 +85,6 @@ ROUND(
     ->orderBy('day')
     ->get();
 
-
-    $statusPie = [
-        'completed'  => $completed,
-        'ongoing'    => $ongoing,
-        'incomplete' => max(0, $totalSessions - ($completed + $ongoing))
-    ];
-
     return view('patrol.foot-summary', array_merge(
         $this->filterData(),
         compact(
@@ -115,11 +93,8 @@ ROUND(
             'ongoing',
             'totalDistance',
             'guardStats',
-            'topGuards',
             'rangeStats',
-            'dailyTrend',
-            'statusPie'
-        )
+            'dailyTrend')
     ));
 }
 
@@ -412,74 +387,81 @@ public function footDistanceByGuard(Request $request)
     /* =====================================================
        MAP VIEW
     ====================================================== */
-   public function maps(Request $request)
+ public function maps(Request $request)
 {
-    /* ================= BASE QUERY ================= */
     $base = DB::table('patrol_sessions')
-        ->join('users', 'users.id', '=', 'patrol_sessions.user_id')
-        ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
-        ->whereNotNull('patrol_sessions.path_geojson');
+            ->join('users', 'users.id', '=', 'patrol_sessions.user_id')
+            ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
+            ->whereNotNull('patrol_sessions.path_geojson');
 
-    /* Date filter */
-    if ($request->filled('from') && $request->filled('to')) {
-        $base->whereBetween('patrol_sessions.started_at', [
-            $request->from . ' 00:00:00',
-            $request->to . ' 23:59:59'
-        ]);
-    }
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $base->whereBetween('patrol_sessions.started_at', [
+                $request->start_date . ' 00:00:00',
+                $request->end_date . ' 23:59:59'
+            ]);
+        }
 
-    /* Range filter */
-    if ($request->filled('range')) {
-        $base->where('site_details.client_name', $request->range);
-    }
+        if ($request->filled('range')) {
+            $base->where('site_details.client_name', $request->range);
+        }
 
-    /* ================= MAP PATHS ================= */
-    $paths = (clone $base)->select(
-        'patrol_sessions.path_geojson',
-        'patrol_sessions.session'
-    )->get();
+        if ($request->filled('beat') && Schema::hasColumn('site_details', 'beat')) {
+            $base->where('site_details.beat', $request->beat);
+        }
 
-    /* ================= SITE MARKERS ================= */
-    $sites = DB::table('site_geofences')
-        ->whereNull('deleted_at')
-        ->whereNotNull('lat')
-        ->whereNotNull('lng')
-        ->select('site_name', 'lat', 'lng', 'type')
-        ->get();
+        if ($request->filled('compartment') && Schema::hasColumn('site_details', 'compartment')) {
+            $base->where('site_details.compartment', $request->compartment);
+        }
 
-    /* ================= RIGHT PANEL (GUARDS) ================= */
+    /* PATHS */
+    $paths = (clone $base)
+        ->select(
+            'patrol_sessions.user_id',
+            'patrol_sessions.session',
+            'patrol_sessions.path_geojson'
+        )
+        ->get()
+        ->groupBy('user_id');
+
+    /* GUARDS (PAGINATED) */
     $guards = (clone $base)
-        ->groupBy('users.id','users.name','users.role_id')
-        ->select('users.name', DB::raw("CASE WHEN users.role_id = 2 THEN 'Circle Incharge' ELSE 'Forest Guard' END as designation"))
+        ->groupBy('users.id', 'users.name', 'users.role_id')
+        ->select(
+            'users.id',
+            'users.name',
+            DB::raw("CASE WHEN users.role_id = 2 THEN 'Circle Incharge' ELSE 'Forest Guard' END AS designation")
+        )
         ->orderBy('users.name')
-        ->get();
+        ->paginate(20)
+        ->withQueryString();
 
-    /* ================= KPI STATS ================= */
+    /* KPIs */
     $stats = [
-        'total_guards' => $guards->count(),
+        'total_guards' => $guards->total(),
         'active_patrols' => (clone $base)->whereNull('patrol_sessions.ended_at')->count(),
         'completed_patrols' => (clone $base)->whereNotNull('patrol_sessions.ended_at')->count(),
         'total_distance_km' => round(
-            (clone $base)->whereNotNull('patrol_sessions.ended_at')
-                ->sum('patrol_sessions.distance') / 1000,
-        2)
+            (clone $base)->whereNotNull('patrol_sessions.ended_at')->sum('patrol_sessions.distance') / 1000,
+            2
+        )
     ];
 
-    /* ================= FILTER DATA ================= */
-    $ranges = DB::table('site_details')
-        ->select('client_name')
-        ->distinct()
-        ->orderBy('client_name')
-        ->pluck('client_name');
+    /* GEOFENCES */
+    $geofences = DB::table('site_geofences')
+        ->whereNull('deleted_at')
+        ->select('site_name', 'type', 'lat', 'lng', 'radius', 'poly_lat_lng')
+        ->get();
 
     return view('patrol.maps', compact(
         'paths',
-        'sites',
         'guards',
         'stats',
-        'ranges'
+        'geofences'
     ));
 }
+
+
+
 
 
 }

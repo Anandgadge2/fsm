@@ -10,7 +10,7 @@ trait FilterDataTrait
      * Strict dependent global filters
      * Range → Beat → Compartment
      */
-    protected function filterData(): array
+    public function filterData(): array
     {
         /* ===============================
            RANGE (client_details ONLY)
@@ -50,29 +50,55 @@ trait FilterDataTrait
     /**
      * Apply filters to any query
      */
-    protected function applyFilters($query)
+//     protected function applyFilters($query)
+// {
+//     if (request()->filled('start_date')) {
+//         $query->whereDate('patrol_sessions.started_at', '>=', request('start_date'));
+//     }
+
+//     if (request()->filled('end_date')) {
+//         $query->whereDate('patrol_sessions.started_at', '<=', request('end_date'));
+//     }
+
+//     if (request()->filled('range')) {
+//         $query->where('site_details.client_id', request('range'));
+//     }
+
+//     if (request()->filled('beat')) {
+//         $query->where('patrol_sessions.site_id', request('beat'));
+//     }
+
+//     if (request()->filled('compartment')) {
+//         $query->where('site_geofences.id', request('compartment'));
+//     }
+
+//     return $query;
+// }
+
+protected function applyGlobalFilters($query, array $map)
 {
-    if (request()->filled('start_date')) {
-        $query->whereDate('patrol_sessions.started_at', '>=', request('start_date'));
+    if (request()->filled('start_date') && isset($map['date'])) {
+        $query->whereDate($map['date'], '>=', request('start_date'));
     }
 
-    if (request()->filled('end_date')) {
-        $query->whereDate('patrol_sessions.started_at', '<=', request('end_date'));
+    if (request()->filled('end_date') && isset($map['date'])) {
+        $query->whereDate($map['date'], '<=', request('end_date'));
     }
 
-    if (request()->filled('range')) {
-        $query->where('site_details.client_id', request('range'));
+    if (request()->filled('range') && isset($map['range'])) {
+        $query->where($map['range'], request('range'));
     }
 
-    if (request()->filled('beat')) {
-        $query->where('patrol_sessions.site_id', request('beat'));
+    if (request()->filled('beat') && isset($map['beat'])) {
+        $query->where($map['beat'], request('beat'));
     }
 
-    if (request()->filled('compartment')) {
-        $query->where('site_geofences.id', request('compartment'));
+    if (request()->filled('compartment') && isset($map['compartment'])) {
+        $query->where($map['compartment'], request('compartment'));
     }
 
     return $query;
 }
+
 
 }

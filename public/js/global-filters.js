@@ -1,44 +1,59 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener('DOMContentLoaded', () => {
 
-    const range = document.getElementById("rangeSelect");
-    const beat = document.getElementById("beatSelect");
-    const geo = document.getElementById("geofenceSelect");
+    const range = document.getElementById('rangeSelect');
+    const beat = document.getElementById('beatSelect');
+    const compartment = document.getElementById('compartmentSelect');
 
-    range.addEventListener("change", async () => {
-        beat.innerHTML = `<option value="">All Beats</option>`;
-        geo.innerHTML = `<option value="">All Compartments</option>`;
-        geo.disabled = true;
+    if (!range || !beat || !compartment) return;
 
-        if (!range.value) {
-            beat.disabled = true;
-            return;
-        }
+    function reset(select, label) {
+        select.innerHTML = `<option value="">All ${label}</option>`;
+        select.disabled = true;
+    }
 
-        const res = await fetch(`/filters/beats?range=${range.value}`);
-        const data = await res.json();
+    function loadBeats(rangeId, selectedBeat = null) {
+        reset(beat, 'Beats');
+        reset(compartment, 'Compartments');
+        if (!rangeId) return;
 
-        data.forEach(b => {
-            beat.innerHTML += `<option value="${b.name}">${b.name}</option>`;
-        });
+        fetch(`/filters/beats/${rangeId}`)
+            .then(r => r.json())
+            .then(data => {
+                data.forEach(b => {
+                    beat.insertAdjacentHTML(
+                        'beforeend',
+                        `<option value="${b.id}" ${b.id == selectedBeat ? 'selected' : ''}>${b.name}</option>`
+                    );
+                });
+                beat.disabled = false;
+            });
+    }
 
-        beat.disabled = false;
-    });
+    function loadCompartments(beatId, selectedComp = null) {
+        reset(compartment, 'Compartments');
+        if (!beatId) return;
 
-    beat.addEventListener("change", async () => {
-        geo.innerHTML = `<option value="">All Compartments</option>`;
+        fetch(`/filters/compartments/${beatId}`)
+            .then(r => r.json())
+            .then(data => {
+                data.forEach(c => {
+                    compartment.insertAdjacentHTML(
+                        'beforeend',
+                        `<option value="${c.id}" ${c.id == selectedComp ? 'selected' : ''}>${c.name}</option>`
+                    );
+                });
+                compartment.disabled = false;
+            });
+    }
 
-        if (!beat.value) {
-            geo.disabled = true;
-            return;
-        }
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get('range');
+    const b = params.get('beat');
+    const c = params.get('compartment');
 
-        const res = await fetch(`/filters/geofences?beat=${beat.value}`);
-        const data = await res.json();
+    if (r) loadBeats(r, b);
+    if (b) loadCompartments(b, c);
 
-        data.forEach(g => {
-            geo.innerHTML += `<option value="${g.geo_name}">${g.geo_name}</option>`;
-        });
-
-        geo.disabled = false;
-    });
+    range.addEventListener('change', () => loadBeats(range.value));
+    beat.addEventListener('change', () => loadCompartments(beat.value));
 });

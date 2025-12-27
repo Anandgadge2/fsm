@@ -1,0 +1,35 @@
+/* ===============================
+   SORTABLE TABLE HEADERS
+================================ */
+
+.smart-sort th {
+    cursor: pointer;
+    position: relative;
+    padding-right: 22px;
+    user-select: none;
+}
+
+/* Default arrow placeholder */
+.smart-sort th::after {
+    content: "";
+    position: absolute;
+    right: 8px;
+    font-size: 11px;
+    opacity: 0.5;
+}
+
+/* Ascending */
+.smart-sort th.sort-asc::after {
+    content: "↑";
+    opacity: 1;
+}
+
+/* Descending */
+.smart-sort th.sort-desc::after {
+    content: "↓";
+    opacity: 1;
+}
+
+th{
+    cursor: pointer;
+}

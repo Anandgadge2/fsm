@@ -10,11 +10,10 @@
 
         <form method="GET">
             <select name="month" onchange="this.form.submit()" class="month-select">
-                @foreach($months as $m)
-                    <option value="{{ $m }}" {{ $month === $m ? 'selected' : '' }}>
-                        {{ \Carbon\Carbon::parse($m.'-01')->format('F Y') }}
-                    </option>
-                @endforeach
+    @foreach(request()->except('month') as $k => $v)
+        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+    @endforeach
+
             </select>
         </form>
     </div>
