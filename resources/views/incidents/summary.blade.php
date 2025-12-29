@@ -25,14 +25,14 @@
 <h6 class="fw-bold mb-2">Repeat Incident Zones (≥ 3 Incidents)</h6>
 
 <div class="table-responsive">
-<table class="table table-sm table-hover align-middle smart-sort">
-<thead class="table-light">
+<table class="table table-sm table-hover align-middle sortable-table">
+<thead>
 <tr>
-    <th>#</th>
-    <th>Range</th>
-    <th>Beat</th>
-    <th>Compartment</th>
-    <th class="text-center">Incidents</th>
+    <th data-sortable data-type="number">#</th>
+    <th data-sortable>Range</th>
+    <th data-sortable>Beat</th>
+    <th data-sortable>Compartment</th>
+    <th data-sortable data-type="number" class="text-center">Incidents</th>
 </tr>
 </thead>
 <tbody>

@@ -29,21 +29,28 @@
             <h6 class="fw-bold mb-2">Guards</h6>
 
             <div style="max-height:620px;overflow:auto;">
-                <table class="table table-sm table-hover">
+                <table class="table table-sm table-hover sortable-table">
                     <thead>
-                        <tr><th>User</th><th>Designation</th></tr>
+                        <tr>
+                            <th data-sortable>User</th>
+                            <th data-sortable>Designation</th>
+                        </tr>
                     </thead>
                     <tbody>
                         @foreach($guards as $g)
                         <tr class="guard-row" data-user="{{ $g->id }}">
-                            <td>{{ $g->name }}</td>
-                            <td class="text-muted">{{ $g->designation }}</td>
+                            <td>
+                                <a href="#" class="guard-name-link" data-guard-id="{{ $g->id }}">
+                                    {{ \App\Helpers\FormatHelper::formatName($g->name) }}
+                                </a>
+                            </td>
+                            <td class="text-muted">{{ \App\Helpers\FormatHelper::formatName($g->designation ?? '') }}</td>
                         </tr>
                         @endforeach
                     </tbody>
                 </table>
 
-                {{ $guards->links() }}
+                {{ $guards->links('pagination::bootstrap-5') }}
             </div>
         </div>
     </div>

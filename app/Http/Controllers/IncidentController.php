@@ -23,6 +23,10 @@ class IncidentController extends Controller
                 'human_impact',
                 'animal_mortality'
             ]);
+            $this->applyCanonicalFilters(
+    $base,
+    'incidence_details.dateFormat'
+);
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $base->whereBetween('patrol_logs.created_at', [
@@ -30,6 +34,7 @@ class IncidentController extends Controller
                 $request->end_date.' 23:59:59'
             ]);
         }
+
 
         /* KPIs */
         $kpis = [
@@ -100,6 +105,10 @@ class IncidentController extends Controller
                 'animal_mortality'
             ]);
 
+        $this->applyCanonicalFilters(
+    $base,
+    'incidence_details.dateFormat'
+);
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $base->whereBetween('patrol_logs.created_at', [
                 $request->start_date.' 00:00:00',

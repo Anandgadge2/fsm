@@ -8,8 +8,19 @@ use App\Http\Controllers\PatrolAnalyticsController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\FilterController;
+use App\Http\Controllers\ExecutiveAnalyticsController;
+use App\Http\Controllers\GuardDetailController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
+/* API Routes */
+Route::prefix('api')->group(function () {
+    Route::get('/guard-details/{guardId}', [GuardDetailController::class, 'getGuardDetails']);
+    Route::get('/patrol-session/{sessionId}', [PatrolController::class, 'getSessionDetails']);
+});
+
+/* Executive Analytics */
+Route::get('/analytics/executive', [ExecutiveAnalyticsController::class, 'executiveDashboard'])->name('analytics.executive');
 
 /* Attendance */
 Route::prefix('attendance')->group(function () {
@@ -28,7 +39,9 @@ Route::prefix('patrol')->group(function () {
     Route::get('/foot-explorer', [PatrolController::class, 'footExplorer'])->name('patrol.foot.explorer');
     Route::get('/patrol/foot/guard-distance',[PatrolController::class,'footDistanceByGuard'])->name('patrol.foot.guard.distance');
 
-    Route::get('/maps', [PatrolController::class, 'maps'])->name('patrol.maps');
+    // Route::get('/maps', [PatrolController::class, 'maps'])->name('patrol.maps');
+    Route::get('/maps', [PatrolController::class, 'kmlView'])->name('patrol.kml.view');
+Route::get('/guard-details/{id}', [PatrolController::class, 'guardDetailsApi']);
 });
 
 /* Reports */
@@ -41,8 +54,6 @@ Route::prefix('reports')->group(function () {
 });
 
 
-// Route::get('/filters/beats/{range}', [App\Http\Controllers\FilterController::class, 'beats']);
-// Route::get('/filters/compartments/{beat}', [App\Http\Controllers\FilterController::class, 'compartments']);
 Route::get('/filters/beats/{range}', [FilterController::class, 'beats']);
 Route::get('/filters/compartments/{beat}', [FilterController::class, 'compartments']);
 
@@ -54,3 +65,7 @@ Route::get('/filters/compartments/{beat}', [FilterController::class, 'compartmen
     Route::get('/explorer', [IncidentController::class, 'explorer']);
 
 });
+
+Route::get('/guard-details/{id}', [PatrolController::class, 'guardDetails']);
+
+
