@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Helpers\FormatHelper;
 
@@ -12,198 +12,237 @@ class GuardDetailController extends Controller
     public function getGuardDetails($guardId)
     {
         try {
+
+            /* ================= BASIC GUARD ================= */
             $guard = DB::table('users')
                 ->where('id', $guardId)
                 ->where('isActive', 1)
                 ->first();
 
             if (!$guard) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Guard not found'
-                ], 404);
+                return response()->json(['success' => false], 404);
             }
 
-            // Format guard name
-            $guard->name = FormatHelper::formatName($guard->name);
+            /* ================= DATE RANGE (LAST MONTH) ================= */
+            $startOfLastMonth = Carbon::now()->subMonth()->startOfMonth()->toDateString();
+            $endOfLastMonth   = Carbon::now()->subMonth()->endOfMonth()->toDateString();
 
-            // Get attendance stats
-            $attendanceStats = $this->getAttendanceStats($guardId);
-            
-            // Get patrol stats
-            $patrolStats = $this->getPatrolStats($guardId);
-            
-            // Get incident stats
-            $incidentStats = $this->getIncidentStats($guardId);
-            
-            // Get patrol paths with GeoJSON
-            $patrolPaths = $this->getPatrolPaths($guardId);
+           /* ================= ATTENDANCE (LAST MONTH – CANONICAL) ================= */
 
-            return response()->json([
-                'success' => true,
-                'guard' => [
-                    'id' => $guard->id,
-                    'name' => $guard->name,
-                    'gen_id' => $guard->gen_id,
-                    'contact' => $guard->contact,
-                    'email' => $guard->email,
-                    'designation' => FormatHelper::formatName($guard->designation ?? ''),
-                    'company_name' => $guard->company_name,
-                    'attendance_stats' => $attendanceStats,
-                    'patrol_stats' => $patrolStats,
-                    'incident_stats' => $incidentStats,
-                    'patrol_paths' => $patrolPaths,
-                ]
+$attendanceBase = DB::table('attendance')
+    ->where('user_id', $guardId)
+    ->whereBetween('dateFormat', [$startOfLastMonth, $endOfLastMonth]);
+
+$presentDays = (clone $attendanceBase)
+    ->select('dateFormat')
+    ->distinct()
+    ->count('dateFormat');
+$totalDays = $presentDays;
+
+$daysInMonth = Carbon::parse($startOfLastMonth)->daysInMonth;
+
+$absentDays = max($daysInMonth - $presentDays, 0);
+
+$lateDays = (clone $attendanceBase)
+    ->whereNotNull('lateTime')
+    ->whereRaw('CAST(lateTime AS UNSIGNED) > 0')
+    ->distinct('dateFormat')
+    ->count('dateFormat');
+
+$attendanceRate = $daysInMonth > 0
+    ? round(($presentDays / $daysInMonth) * 100, 1)
+    : 0;
+
+            /* ================= PATROL STATS ================= */
+            $patrolBase = DB::table('patrol_sessions')
+                ->where('user_id', $guardId);
+
+            $totalSessions     = (clone $patrolBase)->count();
+            $completedSessions = (clone $patrolBase)->whereNotNull('ended_at')->count();
+            $ongoingSessions   = $totalSessions - $completedSessions;
+
+            $totalDistanceKm = round(
+                (clone $patrolBase)->whereNotNull('ended_at')->sum('distance') / 1000,
+                2
+            );
+
+            $avgDistanceKm = $completedSessions > 0
+                ? round(
+                    (clone $patrolBase)->whereNotNull('ended_at')->avg('distance') / 1000,
+                    2
+                )
+                : 0;
+
+            /* ================= INCIDENTS ================= */
+            $incidents = DB::table('incidence_details')
+                ->where('guard_id', $guardId)
+                ->orderByDesc('dateFormat')
+                ->limit(10)
+                ->get()
+                ->map(function ($i) {
+                    return [
+                        'type'      => $i->type,
+                        'priority'  => $i->priority,
+                        'status'    => $i->status,
+                        'site_name' => $i->site_name,
+                        'remark'    => $i->remark,
+                        'date'      => $i->date,
+                        'time'      => $i->time,
+                    ];
+                });
+
+            $totalIncidents = DB::table('incidence_details')
+                ->where('guard_id', $guardId)
+                ->count();
+
+            /* ================= PATROL PATHS (FRONTEND SAFE) ================= */
+            $patrolPaths = DB::table('patrol_sessions')
+                ->where('user_id', $guardId)
+                ->whereNotNull('path_geojson')
+                ->orderByDesc('started_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($p) {
+                    return [
+                        'id'           => $p->id,
+                        'path_geojson' => $p->path_geojson,
+
+                        // IMPORTANT: frontend expects these
+                        'started_at' => $p->started_at
+                            ? Carbon::parse($p->started_at)->toDateTimeString()
+                            : null,
+
+                        'ended_at' => $p->ended_at
+                            ? Carbon::parse($p->ended_at)->toDateTimeString()
+                            : null,
+
+                        'start_lat' => $p->start_lat,
+                        'start_lng' => $p->start_lng,
+                        'end_lat'   => $p->end_lat,
+                        'end_lng'   => $p->end_lng,
+
+                        // distance in METERS (frontend divides)
+                        'distance' => (float) ($p->distance ?? 0),
+
+                        'session' => $p->session,
+                        'type'    => $p->type,
+                    ];
+                });
+
+                /* ================= PATROL PATHS (SMART SOURCE) ================= */
+
+$patrolSessions = DB::table('patrol_sessions')
+    ->where('user_id', $guardId)
+    ->orderByDesc('started_at')
+    ->limit(10)
+    ->get();
+
+$patrolPaths = $patrolSessions->map(function ($p) {
+
+    $path = null;
+
+    /* ================= 1️⃣ USE path_geojson IF PRESENT ================= */
+    if (!empty($p->path_geojson)) {
+        $path = $p->path_geojson;
+    }
+
+    /* ================= 2️⃣ BUILD FROM patrol_logs ================= */
+    else {
+        $logs = DB::table('patrol_logs')
+            ->where('patrol_session_id', $p->id)
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
+            ->orderBy('created_at')
+            ->get(['lat', 'lng']);
+
+        if ($logs->count() >= 2) {
+            $path = json_encode([
+                'type' => 'LineString',
+                'coordinates' => $logs->map(fn ($l) => [
+                    (float) $l->lng,
+                    (float) $l->lat
+                ])->toArray()
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error fetching guard details: ' . $e->getMessage()
-            ], 500);
         }
     }
 
-    private function getAttendanceStats($guardId)
-    {
-        $totalDays = DB::table('attendance')
-            ->where('user_id', $guardId)
-            ->distinct('dateFormat')
-            ->count('dateFormat');
-
-        $presentCount = DB::table('attendance')
-            ->where('user_id', $guardId)
-            ->where('attendance_flag', 1)
-            ->count();
-
-        $absentCount = DB::table('attendance')
-            ->where('user_id', $guardId)
-            ->where('attendance_flag', 0)
-            ->count();
-
-        $lateCount = DB::table('attendance')
-            ->where('user_id', $guardId)
-            ->whereNotNull('lateTime')
-            ->where('lateTime', '>', 0)
-            ->where('attendance_flag', 1)
-            ->count();
-
-        $attendanceRate = $totalDays > 0 ? round(($presentCount / $totalDays) * 100, 1) : 0;
-
-        return [
-            'total_days' => $totalDays,
-            'present_count' => $presentCount,
-            'absent_count' => $absentCount,
-            'late_count' => $lateCount,
-            'present_days' => $presentCount,
-            'attendance_rate' => $attendanceRate,
-        ];
+    /* ================= 3️⃣ FALLBACK: START → END ================= */
+    if (!$path && $p->start_lat && $p->start_lng && $p->end_lat && $p->end_lng) {
+        $path = json_encode([
+            'type' => 'LineString',
+            'coordinates' => [
+                [(float) $p->start_lng, (float) $p->start_lat],
+                [(float) $p->end_lng,   (float) $p->end_lat],
+            ]
+        ]);
     }
 
-    private function getPatrolStats($guardId)
-    {
-        $totalSessions = DB::table('patrol_sessions')
-            ->where('user_id', $guardId)
-            ->count();
+    /* ================= DROP IF STILL NO PATH ================= */
+    if (!$path) return null;
 
-        $completedSessions = DB::table('patrol_sessions')
-            ->where('user_id', $guardId)
-            ->whereNotNull('ended_at')
-            ->count();
+    return [
+        'id'           => $p->id,
+        'path_geojson' => $path,
+        'started_at'   => $p->started_at
+            ? Carbon::parse($p->started_at)->toDateTimeString()
+            : null,
+        'ended_at'     => $p->ended_at
+            ? Carbon::parse($p->ended_at)->toDateTimeString()
+            : null,
+        'start_lat'    => $p->start_lat,
+        'start_lng'    => $p->start_lng,
+        'end_lat'      => $p->end_lat,
+        'end_lng'      => $p->end_lng,
+        'distance'     => (float) ($p->distance ?? 0),
+        'session'      => $p->session,
+        'type'         => $p->type,
+    ];
+})
+->filter()   // remove nulls
+->values();
 
-        $ongoingSessions = $totalSessions - $completedSessions;
 
-        $totalDistance = DB::table('patrol_sessions')
-            ->where('user_id', $guardId)
-            ->whereNotNull('ended_at')
-            ->sum('distance') / 1000; // Convert to km
+            /* ================= RESPONSE ================= */
+            return response()->json([
+                'success' => true,
+                'guard' => [
+                    'id'           => $guard->id,
+                    'name'         => FormatHelper::formatName($guard->name),
+                    'gen_id'       => $guard->gen_id,
+                    'designation'  => $guard->designation,
+                    'contact'      => $guard->contact,
+                    'email'        => $guard->email,
+                    'company_name' => $guard->company_name,
 
-        $avgDistance = $completedSessions > 0 
-            ? (DB::table('patrol_sessions')
-                ->where('user_id', $guardId)
-                ->whereNotNull('ended_at')
-                ->avg('distance') / 1000)
-            : 0;
+                    'attendance_stats' => [
+                        'month'           => Carbon::now()->subMonth()->format('F Y'),
+                        'total_days'      => $totalDays,
+                        'present_days'    => $presentDays,
+                        'absent_days'     => $absentDays,
+                        'late_days'       => $lateDays,
+                        'attendance_rate' => $attendanceRate,
+                    ],
 
-        $avgDuration = DB::table('patrol_sessions')
-            ->where('user_id', $guardId)
-            ->whereNotNull('ended_at')
-            ->selectRaw('AVG(TIMESTAMPDIFF(HOUR, started_at, ended_at)) as avg_hours')
-            ->value('avg_hours') ?? 0;
+                    'patrol_stats' => [
+                        'total_sessions'     => $totalSessions,
+                        'completed_sessions' => $completedSessions,
+                        'ongoing_sessions'   => $ongoingSessions,
+                        'total_distance_km'  => $totalDistanceKm,
+                        'avg_distance_km'    => $avgDistanceKm,
+                    ],
 
-        return [
-            'total_sessions' => $totalSessions,
-            'completed_sessions' => $completedSessions,
-            'ongoing_sessions' => $ongoingSessions,
-            'total_distance_km' => round($totalDistance, 2),
-            'avg_distance_km' => round($avgDistance, 2),
-            'avg_duration_hours' => round($avgDuration, 2),
-        ];
-    }
+                    'incident_stats' => [
+                        'total_incidents' => $totalIncidents,
+                        'latest'          => $incidents,
+                    ],
 
-    private function getIncidentStats($guardId)
-    {
-        $totalIncidents = DB::table('incidence_details')
-            ->where('guard_id', $guardId)
-            ->count();
+                    'patrol_paths' => $patrolPaths,
+                ]
+            ]);
 
-        $incidentsByType = DB::table('incidence_details')
-            ->where('guard_id', $guardId)
-            ->selectRaw('type, statusFlag, COUNT(*) as count')
-            ->groupBy('type', 'statusFlag')
-            ->get()
-            ->groupBy('type')
-            ->map(function($group) {
-                $statusMap = [
-                    0 => ['name' => 'Pending Supervisor', 'color' => 'warning'],
-                    1 => ['name' => 'Resolved', 'color' => 'success'],
-                    2 => ['name' => 'Ignored', 'color' => 'secondary'],
-                    3 => ['name' => 'Escalated to Admin', 'color' => 'info'],
-                    4 => ['name' => 'Pending Admin', 'color' => 'warning'],
-                    5 => ['name' => 'Escalated to Client', 'color' => 'danger'],
-                    6 => ['name' => 'Reverted', 'color' => 'secondary'],
-                ];
-                
-                return $group->map(function($inc) use ($statusMap) {
-                    $status = $statusMap[$inc->statusFlag] ?? ['name' => 'Unknown', 'color' => 'secondary'];
-                    return [
-                        'type' => $inc->type,
-                        'count' => $inc->count,
-                        'status' => $status['name'],
-                        'status_color' => $status['color'],
-                    ];
-                });
-            })
-            ->flatten(1)
-            ->values()
-            ->toArray();
-
-        return [
-            'total_incidents' => $totalIncidents,
-            'incidents_by_type' => $incidentsByType,
-        ];
-    }
-
-    private function getPatrolPaths($guardId)
-    {
-        return DB::table('patrol_sessions')
-            ->where('user_id', $guardId)
-            ->whereNotNull('path_geojson')
-            ->whereNotNull('ended_at')
-            ->select('id', 'path_geojson', 'started_at', 'ended_at', 'distance', 'type', 'session')
-            ->orderByDesc('started_at')
-            ->limit(10) // Limit to last 10 patrols
-            ->get()
-            ->map(function($patrol) {
-                return [
-                    'id' => $patrol->id,
-                    'path_geojson' => $patrol->path_geojson,
-                    'started_at' => $patrol->started_at,
-                    'ended_at' => $patrol->ended_at,
-                    'distance' => $patrol->distance,
-                    'type' => $patrol->type,
-                    'session' => $patrol->session,
-                ];
-            });
+        } catch (\Throwable $e) {
+            Log::error('Guard Detail Error', ['exception' => $e]);
+            return response()->json(['success' => false], 500);
+        }
     }
 }
-

@@ -35,7 +35,7 @@
     <h6 class="fw-bold mb-2">Guard-wise Night Patrol Summary</h6>
     <div class="table-responsive">
         <table class="table table-bordered align-middle sortable-table">
-            <thead>
+            <thead class="table-light">
                 <tr>
                     <th data-sortable>Guard</th>
                     <th data-sortable data-type="number">Sessions</th>

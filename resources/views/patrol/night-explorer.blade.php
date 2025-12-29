@@ -25,14 +25,14 @@
     <h6 class="fw-bold mb-2">Night Patrol Sessions</h6>
 
     <div class="table-responsive">
-        <table class="table table-striped align-middle smart-sort">
+        <table class="table table-striped align-middle sortable-table">
             <thead class="table-light">
             <tr>
-                <th>Guard</th>
-                <th>Type</th>
-                <th>Start Time</th>
-                <th>End Time</th>
-                <th>Distance (KM)</th>
+                <th data-sortable>Guard</th>
+                <th data-sortable>Type</th>
+                <th data-sortable data-type="number">Start Time</th>
+                <th data-sortable data-type="number">End Time</th>
+                <th data-sortable data-type="number">Distance (KM)</th>
             </tr>
             </thead>
             <tbody>
