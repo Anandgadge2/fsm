@@ -202,14 +202,17 @@
 </div>
 
 {{-- ================= SESSION DETAILS MODAL ================= --}}
-<div class="modal fade" id="sessionModal" tabindex="-1">
+<div class="modal fade" id="sessionModal" tabindex="-1" aria-labelledby="sessionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Session Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="sessionModalLabel">Session Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="sessionModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
         </div>
     </div>
 </div>
@@ -230,6 +233,7 @@ let activeLayers = [];
 let activeUserId = null;
 let geofenceLayers = [];
 let isGeofencesVisible = true;
+let sessionDetailsModal = null;
 
 // Session colors by type - using brown/orange for patrol paths like in image
 const sessionColors = {
@@ -658,48 +662,227 @@ function fitAllPaths() {
     }
 }
 
-// Show session details
-function showSessionDetails(sessionId) {
-    fetch(`/api/patrol-session/${sessionId}`)
-        .then(res => res.json())
-        .then(data => {
-            const session = data.session;
-            const modalBody = document.getElementById('sessionModalBody');
-            
-            modalBody.innerHTML = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Session Information</h6>
-                        <p><strong>Session ID:</strong> #${session.session_id}</p>
-                        <p><strong>User:</strong> ${session.user_name}</p>
-                        <p><strong>Status:</strong> <span class="badge bg-${session.status === 'Completed' ? 'success' : 'warning'}">${session.status}</span></p>
-                        <p><strong>Type:</strong> ${session.type}</p>
-                        <p><strong>Session:</strong> ${session.session}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Location Details</h6>
-                        <p><strong>Site:</strong> ${session.site_name || 'N/A'}</p>
-                        <p><strong>Range:</strong> ${session.range_name || 'N/A'}</p>
-                        <p><strong>Distance:</strong> ${session.distance_km} km</p>
-                        <p><strong>Duration:</strong> ${Math.round(session.duration_minutes / 60)}h ${session.duration_minutes % 60}m</p>
-                    </div>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <h6>Timeline</h6>
-                        <p><strong>Started:</strong> ${new Date(session.started_at).toLocaleString()}</p>
-                        <p><strong>Ended:</strong> ${session.ended_at ? new Date(session.ended_at).toLocaleString() : 'In Progress'}</p>
+// Enhanced session details with more information and better formatting
+function showEnhancedSessionDetails(session, sessionId) {
+    const modalBody = document.getElementById('sessionModalBody');
+    
+    // Calculate additional metrics
+    const startTime = new Date(session.started_at);
+    const endTime = session.ended_at ? new Date(session.ended_at) : null;
+    const duration = endTime ? endTime - startTime : Date.now() - startTime;
+    const durationHours = Math.floor(duration / (1000 * 60 * 60));
+    const durationMinutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
+    
+    // Format distance
+    const distance = session.distance_km || 0;
+    const distanceFormatted = distance > 0 ? distance.toFixed(2) + ' km' : 'N/A';
+    
+    // Calculate average speed if available
+    const avgSpeed = distance > 0 && duration > 0 ? 
+        (distance / (duration / (1000 * 60 * 60))).toFixed(2) : 'N/A';
+    
+    modalBody.innerHTML = `
+        <div class="session-details-enhanced">
+            <!-- Session Header -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Session #${session.session_id}</h5>
+                        <span class="badge bg-${session.status === 'Completed' ? 'success' : 'warning'} fs-6">
+                            ${session.status}
+                        </span>
                     </div>
                 </div>
-            `;
+            </div>
             
-            const modal = new bootstrap.Modal(document.getElementById('sessionModal'));
-            modal.show();
-        })
-        .catch(err => {
-            console.error('Error fetching session details:', err);
-            alert('Error loading session details');
-        });
+            <!-- Primary Information -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <h6><i class="bi bi-person"></i> Guard Information</h6>
+                    <p><strong>Name:</strong> ${session.user_name || 'N/A'}</p>
+                    <p><strong>Type:</strong> ${session.type || 'N/A'}</p>
+                    <p><strong>Session:</strong> ${session.session || 'N/A'}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="bi bi-geo-alt"></i> Location Details</h6>
+                    <p><strong>Site:</strong> ${session.site_name || 'N/A'}</p>
+                    <p><strong>Range:</strong> ${session.range_name || 'N/A'}</p>
+                    <p><strong>Client:</strong> ${session.client_name || 'N/A'}</p>
+                </div>
+            </div>
+            
+            <!-- Performance Metrics -->
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted mb-2">Distance</h6>
+                            <h4 class="mb-0">${distanceFormatted}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted mb-2">Duration</h6>
+                            <h4 class="mb-0">${durationHours}h ${durationMinutes}m</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6 class="text-muted mb-2">Avg Speed</h6>
+                            <h4 class="mb-0">${avgSpeed} km/h</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h6><i class="bi bi-clock"></i> Timeline</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Started:</strong></p>
+                            <p class="text-muted">${startTime.toLocaleString()}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Ended:</strong></p>
+                            <p class="text-muted">${endTime ? endTime.toLocaleString() : '<span class="text-warning">In Progress</span>'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="zoomToSession(${sessionId})">
+                            <i class="bi bi-zoom-in"></i> Zoom on Map
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="playbackSession(${sessionId})">
+                            <i class="bi bi-play-circle"></i> Playback
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="exportSessionData(${sessionId})">
+                            <i class="bi bi-download"></i> Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Clean up any existing modal and backdrop first
+    cleanupModal();
+    
+    // Get modal element
+    const modalEl = document.getElementById('sessionModal');
+    
+    // Create new modal instance
+    sessionDetailsModal = new bootstrap.Modal(modalEl, {
+        backdrop: 'static',  // Use static backdrop to prevent issues
+        keyboard: true,
+        focus: true
+    });
+    
+    // Show modal
+    sessionDetailsModal.show();
+    
+    // Add cleanup event listener
+    modalEl.addEventListener('hidden.bs.modal', cleanupModal, { once: true });
+}
+
+// Global cleanup function for modal
+function cleanupModal() {
+    // Remove any existing backdrops
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+        backdrop.remove();
+    });
+    
+    // Reset body styles
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    
+    // Remove any remaining modal instances
+    const modalEl = document.getElementById('sessionModal');
+    const existingModal = bootstrap.Modal.getInstance(modalEl);
+    if (existingModal) {
+        existingModal.dispose();
+    }
+    
+    // Remove highlight from session cards
+    document.querySelectorAll('.session-card').forEach(card => {
+        card.style.border = '';
+        card.style.boxShadow = '';
+    });
+}
+
+// Error toast function for better user feedback
+function showErrorToast(message, sessionId = null) {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert">
+            <div class="toast-header bg-danger text-white">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+                ${sessionId ? `<br><small class="text-muted">Session ID: ${sessionId}</small>` : ''}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Initialize and show toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: 5000
+    });
+    toast.show();
+    
+    // Remove toast element after hiding
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+// Additional helper functions for the enhanced view buttons
+function playbackSession(sessionId) {
+    console.log('Starting playback for session:', sessionId);
+    // Hide modal first
+    const modalEl = document.getElementById('sessionModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+    
+    // Start playback animation
+    setTimeout(() => {
+        playAnimation();
+    }, 500);
+}
+
+function exportSessionData(sessionId) {
+    console.log('Exporting data for session:', sessionId);
+    // Implement export functionality
+    alert('Export functionality coming soon! Session ID: ' + sessionId);
 }
 
 // Playback animation
@@ -762,6 +945,16 @@ function switchMapType(type) {
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
     initMap();
+
+    // Ensure modal never leaves a stuck backdrop/body lock
+    const sessionModalEl = document.getElementById('sessionModal');
+    if (sessionModalEl) {
+        sessionModalEl.addEventListener('hidden.bs.modal', function() {
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('padding-right');
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        });
+    }
     
     // User name clicks - highlight guard's paths
     document.querySelectorAll('.user-name-link').forEach(link => {
@@ -782,12 +975,87 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // View session buttons
+    // Enhanced View session buttons with loading states and better error handling
     document.querySelectorAll('.view-session-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
+        btn.addEventListener('click', async function(e) {
             e.stopPropagation();
+            
             const sessionId = parseInt(this.dataset.sessionId);
-            showSessionDetails(sessionId);
+            const originalContent = this.innerHTML;
+            
+            // Show loading state
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
+            this.disabled = true;
+            
+            try {
+                // Highlight the session card while loading
+                const sessionCard = document.querySelector(`.session-card[data-session-id="${sessionId}"]`);
+                if (sessionCard) {
+                    sessionCard.style.border = '2px solid #007bff';
+                    sessionCard.style.boxShadow = '0 0 8px rgba(0,123,255,0.3)';
+                }
+                
+                // Create AbortController for timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                // Fetch session details with timeout
+                const response = await fetch(`/api/patrol-session/${sessionId}`, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.session) {
+                    throw new Error('No session data received');
+                }
+                
+                // Show session details
+                showEnhancedSessionDetails(data.session, sessionId);
+                
+                // Zoom to session on map
+                zoomToSession(sessionId);
+                
+                // Update button to success state briefly
+                this.innerHTML = '<i class="bi bi-check-circle"></i> Viewed';
+                setTimeout(() => {
+                    this.innerHTML = originalContent;
+                    this.disabled = false;
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error loading session details:', error);
+                
+                // Show user-friendly error message
+                let errorMessage = 'Failed to load session details';
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Request timed out - please check connection';
+                } else if (error.message.includes('404')) {
+                    errorMessage = 'Session not found';
+                } else if (error.message.includes('500')) {
+                    errorMessage = 'Server error - please try again';
+                }
+                
+                // Show error toast or alert
+                showErrorToast(errorMessage, sessionId);
+                
+                // Reset button
+                this.innerHTML = originalContent;
+                this.disabled = false;
+                
+                // Remove highlight from session card
+                const sessionCard = document.querySelector(`.session-card[data-session-id="${sessionId}"]`);
+                if (sessionCard) {
+                    sessionCard.style.border = '';
+                    sessionCard.style.boxShadow = '';
+                }
+            }
         });
     });
     

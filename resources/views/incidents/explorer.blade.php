@@ -25,16 +25,16 @@
     <div class="card-header fw-semibold">Latest 10 Incidents</div>
 
     <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0 smart-sort">
+        <table class="table table-sm align-middle mb-0 sortable-table">
             <thead class="table-light">
             <tr>
-                <th>Type</th>
-                <th data-type="number">Severity</th>
-                <th>Guard</th>
-                <th data-type="number">Range</th>
-                <th data-type="number">Beat</th>
-                <th>Compartment</th>
-                <th>Date</th>
+                <th data-sortable>Type</th>
+                <th data-sortable data-type="number">Severity</th>
+                <th data-sortable>Guard</th>
+                <th data-sortable >Range</th>
+                <th data-sortable >Beat</th>
+                <th data-sortable>Compartment</th>
+                <th data-sortable>Date</th>
             </tr>
             </thead>
             <tbody>
@@ -46,9 +46,17 @@
                             {{ $i->severity }}
                         </span>
                     </td>
-                    <td>{{ $i->guard ?? '—' }}</td>
-                    <td>{{ $i->range_id ?? '—' }}</td>
-                    <td>{{ $i->beat_id ?? '—' }}</td>
+                    <td>
+                        @if(!empty($i->guard_id))
+                            <a href="#" class="guard-name-link" data-guard-id="{{ $i->guard_id }}" onclick="event.stopPropagation()">
+                                {{ \App\Helpers\FormatHelper::formatName($i->guard) }}
+                            </a>
+                        @else
+                            {{ $i->guard ?? '—' }}
+                        @endif
+                    </td>
+                    <td>{{ $i->range_name ?? $i->range_id ?? '—' }}</td>
+                    <td>{{ $i->beat_name ?? $i->beat_id ?? '—' }}</td>
                     <td class="fw-semibold">{{ $i->compartment ?? '—' }}</td>
                     <td>{{ \Carbon\Carbon::parse($i->created_at)->format('d M Y, h:i A') }}</td>
                 </tr>
@@ -84,17 +92,16 @@
     <div class="card-header fw-semibold">All Incidents</div>
 
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 smart-sort">
-            <thead class="table-light ">
+        <table class="table table-hover align-middle mb-0 sortable-table">
+             <thead class="table-light">
             <tr>
-                <th>Type</th>
-                <th>Severity</th>
-                <th>Guard</th>
-                <th>Range</th>
-                <th>Beat</th>
-                <th>Compartment</th>
-                <th>Session</th>
-                <th>Date</th>
+                <th data-sortable>Type</th>
+                <th data-sortable data-type="number">Severity</th>
+                <th data-sortable>Guard</th>
+                <th data-sortable >Range</th>
+                <th data-sortable >Beat</th>
+                <th data-sortable>Compartment</th>
+                <th data-sortable>Date</th>
             </tr>
             </thead>
             <tbody>
@@ -106,9 +113,17 @@
                             {{ $i->severity }}
                         </span>
                     </td>
-                    <td>{{ $i->guard ?? '—' }}</td>
-                    <td>{{ $i->range_id ?? '—' }}</td>
-                    <td>{{ $i->beat_id ?? '—' }}</td>
+                    <td>
+                        @if(!empty($i->guard_id))
+                            <a href="#" class="guard-name-link" data-guard-id="{{ $i->guard_id }}" onclick="event.stopPropagation()">
+                                {{ \App\Helpers\FormatHelper::formatName($i->guard) }}
+                            </a>
+                        @else
+                            {{ $i->guard ?? '—' }}
+                        @endif
+                    </td>
+                    <td>{{ $i->range_name ?? $i->range_id ?? '—' }}</td>
+                    <td>{{ $i->beat_name ?? $i->beat_id ?? '—' }}</td>
                     <td class="fw-semibold">{{ $i->compartment ?? '—' }}</td>
                     <td>{{ $i->session ?? '—' }}</td>
                     <td>{{ \Carbon\Carbon::parse($i->created_at)->format('d M Y, h:i A') }}</td>
@@ -143,8 +158,8 @@ function openIncident(data) {
         <p><strong>Type:</strong> ${data.type}</p>
         <p><strong>Severity:</strong> ${data.severity}</p>
         <p><strong>Guard:</strong> ${data.guard ?? '-'}</p>
-        <p><strong>Range:</strong> ${data.range_id ?? '-'}</p>
-        <p><strong>Beat:</strong> ${data.beat_id ?? '-'}</p>
+        <p><strong>Range:</strong> ${data.range_name ?? data.range_id ?? '-'}</p>
+        <p><strong>Beat:</strong> ${data.beat_name ?? data.beat_id ?? '-'}</p>
         <p><strong>Compartment:</strong> ${data.compartment ?? '-'}</p>
         <p><strong>Session:</strong> ${data.session ?? '-'}</p>
         <p><strong>Date:</strong> ${new Date(data.created_at).toLocaleString()}</p>

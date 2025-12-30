@@ -1,60 +1,88 @@
 // Executive Dashboard Charts
 document.addEventListener('DOMContentLoaded', function() {
+    function normalizeSeries(labels, data) {
+        if (!Array.isArray(labels) || !Array.isArray(data) || labels.length === 0 || data.length === 0) {
+            return {
+                labels: ['No data'],
+                data: [0],
+                isEmpty: true
+            };
+        }
+        return { labels, data, isEmpty: false };
+    }
+
     // Incident Status Chart
     if (typeof window.incidentTrackingData !== 'undefined' && document.getElementById('incidentStatusChart')) {
+        const norm = normalizeSeries(window.incidentTrackingData.statusLabels, window.incidentTrackingData.statusData);
         const statusCtx = document.getElementById('incidentStatusChart').getContext('2d');
         new Chart(statusCtx, {
             type: 'doughnut',
             data: {
-                labels: window.incidentTrackingData.statusLabels,
+                labels: norm.labels,
                 datasets: [{
-                    data: window.incidentTrackingData.statusData,
-                    backgroundColor: ['#dc3545', '#28a745', '#6c757d', '#ffc107', '#17a2b8', '#6610f2', '#e83e8c']
+                    data: norm.data,
+                    backgroundColor: norm.isEmpty
+                        ? ['#e9ecef']
+                        : ['#dc3545', '#fd7e14', '#ffc107', '#28a745', '#6c757d', '#17a2b8', '#6610f2', '#e83e8c']
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: !norm.isEmpty },
+                    tooltip: { enabled: !norm.isEmpty }
+                }
             }
         });
     }
 
     // Incident Priority Chart
     if (typeof window.incidentTrackingData !== 'undefined' && document.getElementById('incidentPriorityChart')) {
+        const norm = normalizeSeries(window.incidentTrackingData.priorityLabels, window.incidentTrackingData.priorityData);
         const priorityCtx = document.getElementById('incidentPriorityChart').getContext('2d');
         new Chart(priorityCtx, {
             type: 'doughnut',
             data: {
-                labels: window.incidentTrackingData.priorityLabels,
+                labels: norm.labels,
                 datasets: [{
-                    data: window.incidentTrackingData.priorityData,
-                    backgroundColor: ['#dc3545', '#ffc107', '#28a745']
+                    data: norm.data,
+                    backgroundColor: norm.isEmpty ? ['#e9ecef'] : ['#dc3545', '#ffc107', '#28a745']
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: !norm.isEmpty },
+                    tooltip: { enabled: !norm.isEmpty }
+                }
             }
         });
     }
 
     // Incident Type Chart
     if (typeof window.incidentTrackingData !== 'undefined' && document.getElementById('incidentTypeChart')) {
+        const norm = normalizeSeries(window.incidentTrackingData.typeLabels, window.incidentTrackingData.typeData);
         const typeCtx = document.getElementById('incidentTypeChart').getContext('2d');
         new Chart(typeCtx, {
             type: 'bar',
             data: {
-                labels: window.incidentTrackingData.typeLabels,
+                labels: norm.labels,
                 datasets: [{
                     label: 'Incidents',
-                    data: window.incidentTrackingData.typeData,
-                    backgroundColor: '#dc3545'
+                    data: norm.data,
+                    backgroundColor: norm.isEmpty ? '#e9ecef' : '#dc3545'
                 }]
             },
             options: {
                 responsive: true,
                 scales: {
-                    y: { beginAtZero: true }
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                },
+                plugins: {
+                    legend: { display: !norm.isEmpty },
+                    tooltip: { enabled: !norm.isEmpty }
                 }
             }
         });

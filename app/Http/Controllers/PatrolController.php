@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
+
 
 use App\Http\Controllers\Traits\FilterDataTrait;
 
@@ -275,8 +277,38 @@ public function footDistanceByGuard(Request $request)
     /* ================= HEATMAP ================= */
     $nightHeatmap = (clone $base)
         ->whereNotNull('patrol_sessions.path_geojson')
-        ->select('patrol_sessions.path_geojson')
+        ->select('patrol_sessions.path_geojson', 'patrol_sessions.started_at')
         ->get();
+
+    // Debug: Log the count of night patrol sessions with paths
+    \Log::info('Night patrol sessions with paths: ' . $nightHeatmap->count());
+    
+    // Debug: Check the first few path_geojson entries
+    if ($nightHeatmap->count() > 0) {
+        $firstItem = $nightHeatmap->first();
+        if ($firstItem && isset($firstItem->path_geojson)) {
+            \Log::info('Sample path_geojson found', ['geojson' => $firstItem->path_geojson]);
+        } else {
+            \Log::info('First item exists but no path_geojson property');
+        }
+    } 
+
+    // If no night patrol data found, try to get any patrol data for debugging
+    if ($nightHeatmap->count() === 0) {
+        $allPatrols = DB::table('patrol_sessions')
+            ->whereNotNull('patrol_sessions.path_geojson')
+            ->where(function ($q) {
+                $q->whereTime('patrol_sessions.started_at', '>=', '18:00:00')
+                  ->orWhereTime('patrol_sessions.started_at', '<', '06:00:00');
+            })
+            ->limit(5)
+            ->get(['patrol_sessions.started_at', 'patrol_sessions.path_geojson']);
+        
+        \Log::info('All night patrols with paths: ' . $allPatrols->count());
+        foreach ($allPatrols as $patrol) {
+            \Log::info('Night patrol at: ' . $patrol->started_at);
+        }
+    }
 
     /* ================= KPIs ================= */
     $totalBeats = DB::table('site_details')
@@ -305,11 +337,14 @@ public function footDistanceByGuard(Request $request)
     /* ================= TABLE ================= */
     $patrols = (clone $base)
         ->select(
+            'users.id as user_id',
             'users.name as guard',
             'patrol_sessions.session as type',
             'patrol_sessions.started_at',
             'patrol_sessions.ended_at',
-            DB::raw('ROUND(COALESCE(patrol_sessions.distance,0)/1000,2) as distance')
+            DB::raw('ROUND(COALESCE(patrol_sessions.distance,0)/1000,2) as distance'),
+            'patrol_sessions.id as session_id',
+            'patrol_sessions.path_geojson'
         )
         ->orderByDesc('patrol_sessions.started_at')
         ->paginate(25)

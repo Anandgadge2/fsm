@@ -38,7 +38,7 @@ trait FilterDataTrait
     /**
      * Apply filters safely to ANY query that has site_id
      */
-    protected function applyCanonicalFilters($query, string $dateColumn = null)
+    protected function applyCanonicalFilters($query, string $dateColumn = null, string $siteColumn = 'site_id')
     {
         // Date
         if ($dateColumn) {
@@ -62,7 +62,7 @@ trait FilterDataTrait
                 // HARD STOP – prevents silent empty bugs
                 $query->whereRaw('1 = 0');
             } else {
-                $query->whereIn('site_id', $siteIds);
+                $query->whereIn($siteColumn, $siteIds);
             }
         }
 

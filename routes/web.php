@@ -69,3 +69,4 @@ Route::get('/filters/compartments/{beat}', [FilterController::class, 'compartmen
 Route::get('/guard-details/{id}', [PatrolController::class, 'guardDetails']);
 
 
+Route::get('/incidents/nearby', [IncidentController::class, 'nearby'])->name('incidents.nearby');

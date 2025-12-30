@@ -37,8 +37,14 @@
             </thead>
             <tbody>
             @forelse($patrols as $p)
-                <tr>
-                    <td>{{ $p->guard }}</td>
+                <tr data-session-id="{{ $p->session_id }}" data-guard-id="{{ $p->user_id }}" class="patrol-row">
+                    <td>
+                        @if(isset($p->user_id))
+                            <x-guard-name :guard-id="$p->user_id" :name="$p->guard" />
+                        @else
+                            {{ \App\Helpers\FormatHelper::formatName($p->guard) }}
+                        @endif
+                    </td>
                     <td>{{ $p->type }}</td>
                     <td>{{ \Carbon\Carbon::parse($p->started_at)->format('d M h:i A') }}</td>
                     <td>
@@ -80,10 +86,19 @@
 </div>
 
 {{-- ================= HEATMAP ================= --}}
-<div class="card p-3">
-    <h6 class="fw-bold">Night Patrol Heatmap</h6>
+<!-- <div class="card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0">Night Patrol Heatmap (6 PM - 6 AM)</h6>
+        <div>
+            <small class="text-muted">Showing patrol sessions from 18:00 to 06:00</small>
+            <button class="btn btn-sm btn-outline-primary ms-2" onclick="testHeatmap()">Test Heatmap</button>
+        </div>
+    </div>
     <div id="nightHeatMap" style="height:450px;border-radius:8px;"></div>
-</div>
+    <div class="mt-2 text-muted small">
+        <i class="bi bi-info-circle"></i> Night patrol sessions: {{ $nightHeatmap->count() }} found | Hold Ctrl + Scroll to zoom
+    </div>
+</div> -->
 
 <style>
 .chart-scroll {
@@ -93,6 +108,20 @@
 #nightDistanceChart {
     min-width: 1600px;
     height: 360px !important;
+}
+/* Hint for Ctrl+scroll zoom */
+#nightHeatMap::after {
+    content: 'Hold Ctrl + Scroll to zoom';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255,255,255,0.85);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #333;
+    pointer-events: none;
+    z-index: 1000;
 }
 </style>
 
@@ -153,46 +182,343 @@ new Chart(document.getElementById('nightDistanceChart'), {
     }
 });
 </script>
-
-{{-- ================= HEATMAP ================= --}}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
 <script>
-const heatMap = L.map('nightHeatMap').setView([22.5, 78.5], 7);
+// Global variables
+let heatMap;
+let currentTileLayer;
+let satelliteTileLayer;
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap'
-}).addTo(heatMap);
+// Function to normalize GeoJSON path data (from kml-view)
+function normalizePathGeoJson(raw) {
+    let data = raw;
+    if (!data) return null;
 
-let heatPoints = [];
-
-@foreach($nightHeatmap as $h)
-try {
-    const geo = JSON.parse(@json($h->path_geojson));
-
-    if (geo.type === 'LineString') {
-        geo.coordinates.forEach(c => heatPoints.push([c[1], c[0], 0.8]));
+    // Parse JSON string
+    if (typeof data === 'string') {
+        try {
+            data = JSON.parse(data);
+        } catch {
+            return null;
+        }
     }
 
-    if (geo.type === 'MultiLineString') {
-        geo.coordinates.forEach(line =>
-            line.forEach(c => heatPoints.push([c[1], c[0], 0.8]))
-        );
-    }
-} catch(e) {}
-@endforeach
+    let coords = [];
 
-if (heatPoints.length === 0) {
-    console.warn('No night patrol paths found for heatmap');
+    /* Case 1: Proper GeoJSON */
+    if (data && typeof data === 'object' && data.type) {
+        if (data.type === 'LineString' && Array.isArray(data.coordinates)) {
+            coords = data.coordinates
+                .map(c => [Number(c[0]), Number(c[1])])
+                .filter(c => Number.isFinite(c[0]) && Number.isFinite(c[1]));
+            if (coords.length > 0) {
+                return { type: 'LineString', coordinates: coords };
+            }
+        }
+
+        if (data.type === 'MultiLineString' && Array.isArray(data.coordinates)) {
+            const allCoords = [];
+            data.coordinates.forEach(line => {
+                if (Array.isArray(line)) {
+                    line.forEach(c => {
+                        if (Array.isArray(c) && c.length >= 2) {
+                            const coord = [Number(c[0]), Number(c[1])];
+                            if (Number.isFinite(coord[0]) && Number.isFinite(coord[1])) {
+                                allCoords.push(coord);
+                            }
+                        }
+                    });
+                }
+            });
+            if (allCoords.length > 0) {
+                return { type: 'LineString', coordinates: allCoords };
+            }
+        }
+    }
+
+    return null;
 }
 
-L.heatLayer(heatPoints, {
-    radius: 32,
-    blur: 25,
-    maxZoom: 10,
-    minOpacity: 0.5
-}).addTo(heatMap);
+// Initialize map (based on kml-view pattern)
+function initNightMap() {
+    console.log('Initializing night patrol map...');
+    
+    heatMap = L.map('nightHeatMap', {
+        center: [22.5, 78.5],
+        zoom: 7,
+        zoomControl: true,
+        scrollWheelZoom: false,
+        dragging: true
+    });
+    
+    // Enable zoom with Ctrl+scroll
+    heatMap.on('wheel', function(e) {
+        if (e.originalEvent.ctrlKey) {
+            e.originalEvent.preventDefault();
+            const delta = e.originalEvent.deltaY;
+            if (delta > 0) {
+                heatMap.setZoom(heatMap.getZoom() - 1);
+            } else {
+                heatMap.setZoom(heatMap.getZoom() + 1);
+            }
+        }
+    });
+    
+    // Handle Ctrl+scroll via keyboard events
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey) {
+            heatMap.scrollWheelZoom.enable();
+        }
+    });
+    
+    document.addEventListener('keyup', function(e) {
+        if (!e.ctrlKey) {
+            heatMap.scrollWheelZoom.disable();
+        }
+    });
+
+    // Default tile layer
+    currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(heatMap);
+
+    console.log('Map initialized successfully');
+}
+
+// Load and process night patrol heatmap data
+function loadNightHeatmap() {
+    console.log('Loading night patrol heatmap data...');
+    console.log('Total sessions to process: {{ $nightHeatmap->count() }}');
+    
+    let heatPoints = [];
+    let processedSessions = 0;
+    let sessionIndex = 0;
+
+    @php($index = 0)
+    @foreach($nightHeatmap as $h)
+    try {
+        sessionIndex++;
+        console.log('Processing session ' + sessionIndex + '...');
+        
+        let rawPath = @json($h->path_geojson);
+        if (typeof rawPath === 'string') {
+            rawPath = JSON.parse(rawPath);
+        }
+        
+        const geoJson = normalizePathGeoJson(rawPath);
+        if (!geoJson) {
+            console.warn('Failed to normalize GeoJSON for session ' + sessionIndex);
+            continue;
+        }
+        
+        // Convert coordinates to heat points
+        if (geoJson.coordinates && Array.isArray(geoJson.coordinates)) {
+            geoJson.coordinates.forEach(coord => {
+                if (Array.isArray(coord) && coord.length >= 2) {
+                    // Convert [lng, lat] to [lat, lng] for heatmap
+                    heatPoints.push([coord[1], coord[0], 0.8]);
+                }
+            });
+            processedSessions++;
+        }
+        
+    } catch(e) {
+        console.error('Error processing session ' + sessionIndex + ':', e);
+    }
+    @php($index++)
+    @endforeach
+
+    console.log('Processed ' + processedSessions + ' sessions');
+    console.log('Generated ' + heatPoints.length + ' heat points');
+
+    // Add heatmap to map
+    if (heatPoints.length > 0) {
+        try {
+            const heatLayer = L.heatLayer(heatPoints, {
+                radius: 32,
+                blur: 25,
+                maxZoom: 10,
+                minOpacity: 0.5
+            });
+            
+            heatLayer.addTo(heatMap);
+            console.log('Night patrol heatmap loaded successfully!');
+            
+            // Fit map to show all heat points
+            if (heatPoints.length > 0) {
+                const bounds = L.latLngBounds(heatPoints.map(p => [p[0], p[1]]));
+                heatMap.fitBounds(bounds, { padding: [20, 20] });
+            }
+            
+        } catch(heatError) {
+            console.error('Error adding heatmap layer:', heatError);
+            alert('Error adding heatmap: ' + heatError.message);
+        }
+    } else {
+        console.warn('No heat points generated - showing demo data');
+        
+        // Add demo data
+        const demoPoints = [
+            [22.5, 78.5, 0.3],
+            [22.51, 78.51, 0.3],
+            [22.49, 78.49, 0.3]
+        ];
+        
+        L.heatLayer(demoPoints, {
+            radius: 25,
+            blur: 20,
+            maxZoom: 10,
+            minOpacity: 0.2
+        }).addTo(heatMap);
+        
+        L.control.attribution({prefix: false}).addAttribution('No night patrol data available (6 PM - 6 AM)').addTo(heatMap);
+    }
+}
+
+// Initialize everything when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded - initializing night patrol explorer...');
+    
+    // Check if heat plugin is available
+    if (typeof L.heatLayer === 'undefined') {
+        console.error('Leaflet heat plugin not loaded!');
+        alert('Heatmap plugin not loaded. Please refresh the page.');
+        return;
+    }
+    
+    // Initialize map
+    initNightMap();
+    
+    // Load heatmap data
+    setTimeout(() => {
+        loadNightHeatmap();
+    }, 500);
+});
+
+// Test function
+function testHeatmap() {
+    console.log('Testing heatmap functionality...');
+    
+    if (typeof heatMap === 'undefined' || !heatMap) {
+        alert('Map not initialized!');
+        return;
+    }
+    
+    // Clear existing heat layers
+    heatMap.eachLayer(function(layer) {
+        if (layer instanceof L.HeatLayer) {
+            heatMap.removeLayer(layer);
+        }
+    });
+    
+    // Add test points
+    const testPoints = [
+        [22.5, 78.5, 0.8],
+        [22.51, 78.51, 0.8],
+        [22.49, 78.49, 0.8],
+        [22.52, 78.52, 0.8],
+        [22.48, 78.48, 0.8]
+    ];
+    
+    try {
+        L.heatLayer(testPoints, {
+            radius: 32,
+            blur: 25,
+            maxZoom: 10,
+            minOpacity: 0.5
+        }).addTo(heatMap);
+        
+        alert('Test heatmap added! You should see 5 red heat points.');
+    } catch(e) {
+        alert('Error adding test heatmap: ' + e.message);
+    }
+}
+</script>
+
+{{-- ================= STYLE ================= --}}
+<style>
+.chart-scroll {
+    overflow-x: auto;
+}
+#speedChart,
+#nightDistanceChart {
+    min-width: 1600px;
+    height: 360px !important;
+}
+/* Hint for Ctrl+scroll zoom */
+#nightHeatMap::after {
+    content: 'Hold Ctrl + Scroll to zoom';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255,255,255,0.85);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #333;
+    pointer-events: none;
+    z-index: 1000;
+}
+</style>
+
+
+
+@push('scripts')
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+{{-- ================= SPEED CHART ================= --}}
+<script>
+new Chart(document.getElementById('speedChart'), {
+    type: 'bar',
+    data: {
+        labels: {!! json_encode($speedStats->pluck('guard')) !!},
+        datasets: [{
+            data: {!! json_encode($speedStats->pluck('speed')) !!},
+            backgroundColor: '#1565c0',
+            barThickness: 15
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 }
+            },
+            y: { beginAtZero: true }
+        },
+        plugins: { legend: { display: false } }
+    }
+});
+</script>
+
+{{-- ================= DISTANCE CHART ================= --}}
+<script>
+new Chart(document.getElementById('nightDistanceChart'), {
+    type: 'bar',
+    data: {
+        labels: {!! json_encode($nightDistanceByGuard->pluck('guard')) !!},
+        datasets: [{
+            data: {!! json_encode($nightDistanceByGuard->pluck('total_distance')) !!},
+            backgroundColor: '#2e7d32',
+            barThickness: 15
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 }
+            },
+            y: { beginAtZero: true }
+        },
+        plugins: { legend: { display: false } }
+    }
+});
 </script>
 
 @endpush

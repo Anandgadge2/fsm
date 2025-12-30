@@ -3,6 +3,8 @@
 @section('content')
 
 <div class="container-fluid">
+   
+
     {{-- Header --}}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -32,8 +34,8 @@
         'timePatterns' => $timePatterns
     ])
 
-    {{-- Risk Zones & Coverage --}}
-    @include('analytics.partials.risk-coverage', ['riskZones' => $riskZones, 'coverageAnalysis' => $coverageAnalysis])
+    <!-- {{-- Risk Zones & Coverage --}}
+    @include('analytics.partials.risk-coverage', ['riskZones' => $riskZones, 'coverageAnalysis' => $coverageAnalysis]) -->
 
     {{-- Efficiency Metrics --}}
     @include('analytics.partials.efficiency-metrics', ['efficiencyMetrics' => $efficiencyMetrics])

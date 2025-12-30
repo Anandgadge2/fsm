@@ -14,10 +14,14 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <canvas id="incidentStatusChart" style="max-height: 150px;"></canvas>
+                        <div style="height:150px">
+                            <canvas id="incidentStatusChart"></canvas>
+                        </div>
                     </div>
                     <div class="col-md-4">
-                        <canvas id="incidentPriorityChart" style="max-height: 150px;"></canvas>
+                        <div style="height:150px">
+                            <canvas id="incidentPriorityChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -44,15 +48,19 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($incidentTracking['incidentsBySite'] as $site)
-                            <tr>
-                                <td>{{ $site->site_name }}</td>
-                                <td>{{ $site->incident_count }}</td>
-                                <td><span class="badge bg-success">{{ $site->resolved_count }}</span></td>
-                                <td><span class="badge bg-warning">{{ $site->pending_count }}</span></td>
-                                <td>{{ $site->resolution_percentage }}%</td>
-                            </tr>
-                            @endforeach
+                            @forelse($incidentTracking['incidentsBySite'] as $site)
+                                <tr>
+                                    <td>{{ $site->site_name }}</td>
+                                    <td>{{ $site->incident_count }}</td>
+                                    <td><span class="badge bg-success">{{ $site->resolved_count }}</span></td>
+                                    <td><span class="badge bg-warning">{{ $site->pending_count }}</span></td>
+                                    <td>{{ $site->resolution_percentage }}%</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-3">No incidents for selected period.</td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
@@ -66,7 +74,9 @@
                 <h6 class="mb-0">Incident Types</h6>
             </div>
             <div class="card-body">
-                <canvas id="incidentTypeChart"></canvas>
+                <div style="height:210px">
+                    <canvas id="incidentTypeChart"></canvas>
+                </div>
             </div>
         </div>
 
@@ -85,13 +95,17 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($incidentTracking['resolutionTime'] as $rt)
-                            <tr>
-                                <td>{{ $rt->type }}</td>
-                                <td>{{ number_format($rt->avg_days, 1) }}</td>
-                                <td>{{ $rt->max_days }}</td>
-                            </tr>
-                            @endforeach
+                            @forelse($incidentTracking['resolutionTime'] as $rt)
+                                <tr>
+                                    <td>{{ $rt->type }}</td>
+                                    <td>{{ number_format($rt->avg_days, 1) }}</td>
+                                    <td>{{ $rt->max_days }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">No resolution data available.</td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
@@ -101,15 +115,14 @@
 </div>
 
 @php
-    // Map status flags to names
+    // Map analytics flags to names
+    // Executive incident analytics is derived from patrol_logs; we treat these as severity buckets.
     $statusMap = [
-        0 => 'Pending Supervisor',
-        1 => 'Resolved',
-        2 => 'Ignored',
-        3 => 'Escalated to Admin',
-        4 => 'Pending Admin',
-        5 => 'Escalated to Client',
-        6 => 'Reverted'
+        5 => 'Critical',
+        4 => 'High',
+        3 => 'Medium',
+        2 => 'Low',
+        1 => 'Info'
     ];
     
     // Map priority flags to names

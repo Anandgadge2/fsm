@@ -156,15 +156,27 @@ class AttendanceController extends Controller
 
     /* ================= USERS + ASSIGN ================= */
 
-    $users = DB::table('users')
+    $siteIds = $this->resolveSiteIds();
+
+    $usersQuery = DB::table('users')
         ->join('site_assign', 'users.id', '=', 'site_assign.user_id')
-        ->where('users.isActive', 1)
-        ->when($request->filled('range'), fn ($q) =>
-            $q->where('site_assign.client_id', $request->range)
-        )
-        ->when($request->filled('beat'), fn ($q) =>
-            $q->whereRaw('FIND_IN_SET(?, site_assign.site_id)', [$request->beat])
-        )
+        ->where('users.isActive', 1);
+
+    if ($request->filled('range')) {
+        $usersQuery->where('site_assign.client_id', $request->range);
+    }
+
+    // Beat/Compartment both resolve to site_details.id values (siteIds)
+    // site_assign.site_id is CSV; filter via FIND_IN_SET.
+    if (!empty($siteIds)) {
+        $usersQuery->where(function ($q) use ($siteIds) {
+            foreach ($siteIds as $sid) {
+                $q->orWhereRaw('FIND_IN_SET(?, site_assign.site_id)', [$sid]);
+            }
+        });
+    }
+
+    $users = $usersQuery
         ->select(
             'users.id',
             'users.name',
@@ -200,11 +212,6 @@ class AttendanceController extends Controller
         ->groupBy('site_id')
         ->map(fn ($rows) => $rows->first()->name);
 
-        $this->applyCanonicalFilters(
-    $compartmentMap,
-    'attendance.dateFormat'
-);
-
     /* ================= ATTENDANCE ================= */
 
     $attendance = DB::table('attendance')
@@ -213,14 +220,10 @@ class AttendanceController extends Controller
             $endDate->toDateString()
         ])
         ->whereIn('user_id', $users->keys())
+        ->where('attendance_flag', 1)
         ->select('user_id', 'dateFormat')
         ->get()
         ->groupBy(fn ($r) => $r->user_id . '_' . $r->dateFormat);
-
-        $this->applyCanonicalFilters(
-    $attendance,
-    'attendance.dateFormat'
-);
 
     /* ================= GRID ================= */
 
@@ -268,11 +271,7 @@ class AttendanceController extends Controller
         ->distinct()
         ->orderByDesc('ym')
         ->pluck('ym');
-    
-      $this->applyCanonicalFilters(
-    $months,
-    'attendance.dateFormat'
-);  
+
     return view('attendance.explorer', array_merge(
         $this->filterData(),
         compact(

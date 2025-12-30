@@ -3,6 +3,10 @@
 <div class="global-filter-card sticky-filter">
     <form method="GET" class="global-filter-grid">
 
+        @foreach(request()->except(['range','beat','compartment','start_date','end_date']) as $k => $v)
+            <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+        @endforeach
+
         <div class="filter-block">
             <label>Range</label>
             <select name="range" id="rangeSelect">

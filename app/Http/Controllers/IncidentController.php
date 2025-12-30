@@ -23,10 +23,8 @@ class IncidentController extends Controller
                 'human_impact',
                 'animal_mortality'
             ]);
-            $this->applyCanonicalFilters(
-    $base,
-    'incidence_details.dateFormat'
-);
+            
+        $this->applyCanonicalFilters($base, 'patrol_logs.created_at');
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $base->whereBetween('patrol_logs.created_at', [
@@ -34,7 +32,6 @@ class IncidentController extends Controller
                 $request->end_date.' 23:59:59'
             ]);
         }
-
 
         /* KPIs */
         $kpis = [
@@ -60,9 +57,13 @@ class IncidentController extends Controller
 
         $repeatZones = (clone $base)
             ->whereNotNull('site_geofences.site_name')
+            ->leftJoin('client_details', 'client_details.id', '=', 'site_geofences.client_id')
+            ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
             ->selectRaw('
                 site_geofences.client_id as range_id,
+                COALESCE(client_details.name, site_geofences.client_id) as range_name,
                 patrol_sessions.site_id as beat_id,
+                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
                 site_geofences.site_name as compartment,
                 site_geofences.lat,
                 site_geofences.lng,
@@ -70,7 +71,9 @@ class IncidentController extends Controller
             ')
             ->groupBy(
                 'site_geofences.client_id',
+                'client_details.name',
                 'patrol_sessions.site_id',
+                'site_details.name',
                 'site_geofences.site_name',
                 'site_geofences.lat',
                 'site_geofences.lng'
@@ -94,10 +97,18 @@ class IncidentController extends Controller
     /* ================= INCIDENT EXPLORER ================= */
     public function explorer(Request $request)
     {
+        $siteGeofences = DB::table('site_geofences')
+            ->selectRaw('site_id, MAX(client_id) as client_id, MAX(site_name) as site_name')
+            ->groupBy('site_id');
+
         $base = DB::table('patrol_logs')
             ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
             ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
-            ->leftJoin('site_geofences', 'site_geofences.site_id', '=', 'patrol_sessions.site_id')
+            ->leftJoinSub($siteGeofences, 'site_geofences', function ($join) {
+                $join->on('site_geofences.site_id', '=', 'patrol_sessions.site_id');
+            })
+            ->leftJoin('client_details', 'client_details.id', '=', 'site_geofences.client_id')
+            ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
             ->whereIn('patrol_logs.type', [
                 'animal_sighting',
                 'water_source',
@@ -105,10 +116,8 @@ class IncidentController extends Controller
                 'animal_mortality'
             ]);
 
-        $this->applyCanonicalFilters(
-    $base,
-    'incidence_details.dateFormat'
-);
+        $this->applyCanonicalFilters($base, 'patrol_logs.created_at', 'patrol_sessions.site_id');
+
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $base->whereBetween('patrol_logs.created_at', [
                 $request->start_date.' 00:00:00',
@@ -124,9 +133,12 @@ class IncidentController extends Controller
                 patrol_logs.payload,
                 patrol_logs.notes,
                 patrol_logs.created_at,
+                users.id as guard_id,
                 users.name as guard,
                 site_geofences.client_id as range_id,
+                COALESCE(client_details.name, site_geofences.client_id) as range_name,
                 patrol_sessions.site_id as beat_id,
+                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
                 site_geofences.site_name as compartment,
                 patrol_sessions.session,
                 CASE
@@ -147,9 +159,12 @@ class IncidentController extends Controller
             ->selectRaw('
                 patrol_logs.id,
                 patrol_logs.type,
+                users.id as guard_id,
                 users.name as guard,
                 site_geofences.client_id as range_id,
+                COALESCE(client_details.name, site_geofences.client_id) as range_name,
                 patrol_sessions.site_id as beat_id,
+                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
                 site_geofences.site_name as compartment,
                 patrol_logs.notes,
                 patrol_logs.payload,
@@ -181,5 +196,82 @@ class IncidentController extends Controller
             $this->filterData(),
             compact('incidents','latestTop10','typeStats','sessionStats')
         ));
+    }
+
+    /* ================= INCIDENT NEARBY (for map clicks) ================= */
+    public function nearby(Request $request)
+    {
+        if (!$request->filled('lat') || !$request->filled('lng')) {
+            return response()->json(['error' => 'Location required'], 400);
+        }
+
+        $lat = $request->lat;
+        $lng = $request->lng;
+        $radius = $request->get('radius', 5); // km radius, default 5km
+
+        $base = DB::table('patrol_logs')
+            ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
+            ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
+            ->leftJoin('site_geofences', 'site_geofences.site_id', '=', 'patrol_sessions.site_id')
+            ->leftJoin('client_details', 'client_details.id', '=', 'site_geofences.client_id')
+            ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
+            ->whereIn('patrol_logs.type', [
+                'animal_sighting',
+                'water_source',
+                'human_impact',
+                'animal_mortality'
+            ])
+            ->whereNotNull('patrol_logs.lat')
+            ->whereNotNull('patrol_logs.lng');
+
+        $this->applyCanonicalFilters($base, 'patrol_logs.created_at');
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $base->whereBetween('patrol_logs.created_at', [
+                $request->start_date . ' 00:00:00',
+                $request->end_date . ' 23:59:59'
+            ]);
+        }
+
+        // Calculate distance using Haversine formula
+        $incidents = $base
+            ->selectRaw("
+                patrol_logs.id,
+                patrol_logs.type,
+                patrol_logs.payload,
+                patrol_logs.notes,
+                patrol_logs.lat,
+                patrol_logs.lng,
+                patrol_logs.created_at,
+                users.name as guard,
+                users.contact as guard_contact,
+                site_geofences.client_id as range_id,
+                COALESCE(client_details.name, site_geofences.client_id) as range_name,
+                patrol_sessions.site_id as beat_id,
+                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
+                site_geofences.site_name as compartment,
+                patrol_sessions.session,
+                patrol_sessions.type as patrol_type,
+                (6371 * acos(cos(radians(?)) 
+                    * cos(radians(patrol_logs.lat)) 
+                    * cos(radians(patrol_logs.lng) - radians(?)) 
+                    + sin(radians(?)) 
+                    * sin(radians(patrol_logs.lat)))) AS distance,
+                CASE
+                    WHEN patrol_logs.type = 'animal_mortality' THEN 5
+                    WHEN patrol_logs.type = 'human_impact' THEN 4
+                    WHEN patrol_logs.type = 'animal_sighting' THEN 3
+                    WHEN patrol_logs.type = 'water_source' THEN 2
+                    ELSE 1
+                END as severity
+            ", [$lat, $lng, $lat])
+            ->having('distance', '<=', $radius)
+            ->orderBy('distance')
+            ->orderByDesc('severity')
+            ->orderByDesc('patrol_logs.created_at')
+            ->limit(20)
+            ->get();
+
+        return view('incidents.nearby', compact('incidents', 'lat', 'lng', 'radius'));
     }
 }

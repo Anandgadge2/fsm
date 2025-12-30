@@ -67,16 +67,47 @@ class ExecutiveAnalyticsController extends Controller
         $avgDistancePerGuard = $activeGuards > 0 ? round($totalDistance / $activeGuards, 2) : 0;
 
         // Attendance
+        // NOTE: attendance table contains ONLY presence logs.
+        // Total guards must be derived from users (active + assigned to filtered sites).
+        $guardQuery = DB::table('users')
+            ->join('site_assign', 'users.id', '=', 'site_assign.user_id')
+            ->where('users.isActive', 1);
+
+        if (request()->filled('range')) {
+            $guardQuery->where('site_assign.client_id', request('range'));
+        }
+
+        // Beat/Compartment filters resolve to site_details.id values.
+        // site_assign.site_id is stored as CSV; filter via FIND_IN_SET.
+        if (!empty($siteIds)) {
+            $guardQuery->where(function ($q) use ($siteIds) {
+                foreach ($siteIds as $sid) {
+                    $q->orWhereRaw('FIND_IN_SET(?, site_assign.site_id)', [$sid]);
+                }
+            });
+        }
+
+        $guardIds = (clone $guardQuery)
+            ->distinct()
+            ->pluck('users.id');
+
+        $totalGuardsForAttendance = $guardIds->count();
+
         $attendanceQuery = DB::table('attendance')
-            ->whereBetween('dateFormat', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
-        
+            ->whereBetween('dateFormat', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->whereIn('user_id', $guardIds);
+
         if (!empty($siteIds)) {
             $attendanceQuery->whereIn('site_id', $siteIds);
         }
 
-        $totalAttendance = (clone $attendanceQuery)->count();
-        $presentCount = (clone $attendanceQuery)->where('attendance_flag', 1)->count();
-        $attendanceRate = $totalAttendance > 0 ? round(($presentCount / $totalAttendance) * 100, 1) : 0;
+        $presentCount = (clone $attendanceQuery)
+            ->distinct('user_id')
+            ->count('user_id');
+
+        $attendanceRate = $totalGuardsForAttendance > 0
+            ? round(($presentCount / $totalGuardsForAttendance) * 100, 1)
+            : 0;
 
         // Incidents
         $incidentQuery = DB::table('incidence_details')
@@ -236,96 +267,129 @@ class ExecutiveAnalyticsController extends Controller
             ]);
         }
 
-        // Sort and paginate
+        // Sort (no pagination - dashboard should show full table with scroll)
         $sortedPerformance = $fullPerformance->sortByDesc('performance_score')->values();
-        $currentPage = request()->get('page', 1);
-        $perPage = 20;
-        $total = $sortedPerformance->count();
-        $items = $sortedPerformance->slice(($currentPage - 1) * $perPage, $perPage)->values();
-        
-        // Create paginator manually
-        $fullPerformancePaginated = new \Illuminate\Pagination\LengthAwarePaginator(
-            $items,
-            $total,
-            $perPage,
-            $currentPage,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
 
         return [
             'topPerformers' => $allGuards->sortByDesc('performance_score')->take(5)->values(),
-            'fullPerformance' => $fullPerformancePaginated,
+            'fullPerformance' => $sortedPerformance,
         ];
     }
 
     private function getIncidentStatusTracking(Carbon $startDate, Carbon $endDate): array
     {
-        $siteIds = $this->resolveSiteIds();
+        // Incident data source:
+        // The incident explorer uses patrol_logs (animal_sighting / water_source / human_impact / animal_mortality).
+        // incidence_details may be empty in your DB, which makes charts blank.
+        $siteGeofences = DB::table('site_geofences')
+            ->selectRaw('site_id, MAX(client_id) as client_id, MAX(site_name) as site_name')
+            ->groupBy('site_id');
 
-        $query = DB::table('incidence_details')
-            ->whereBetween('dateFormat', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+        $base = DB::table('patrol_logs')
+            ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
+            ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
+            ->leftJoinSub($siteGeofences, 'site_geofences', function ($join) {
+                $join->on('site_geofences.site_id', '=', 'patrol_sessions.site_id');
+            })
+            ->whereIn('patrol_logs.type', [
+                'animal_sighting',
+                'water_source',
+                'human_impact',
+                'animal_mortality'
+            ])
+            ->whereBetween('patrol_logs.created_at', [
+                $startDate->copy()->startOfDay(),
+                $endDate->copy()->endOfDay()
+            ]);
 
-        if (!empty($siteIds)) {
-            $query->whereIn('site_id', $siteIds);
-        }
+        $this->applyCanonicalFilters($base, 'patrol_logs.created_at', 'patrol_sessions.site_id');
 
-        // Status distribution
-        $statusDistribution = (clone $query)
-            ->selectRaw('statusFlag, COUNT(*) as count')
-            ->groupBy('statusFlag')
+        // Severity mapping consistent with IncidentController
+        // 5: animal_mortality, 4: human_impact, 3: animal_sighting, 2: water_source
+        $statusDistribution = (clone $base)
+            ->selectRaw('
+                CASE
+                    WHEN patrol_logs.type = "animal_mortality" THEN 5
+                    WHEN patrol_logs.type = "human_impact" THEN 4
+                    WHEN patrol_logs.type = "animal_sighting" THEN 3
+                    WHEN patrol_logs.type = "water_source" THEN 2
+                    ELSE 1
+                END as statusFlag,
+                COUNT(*) as count
+            ')
+            ->groupByRaw('
+                CASE
+                    WHEN patrol_logs.type = "animal_mortality" THEN 5
+                    WHEN patrol_logs.type = "human_impact" THEN 4
+                    WHEN patrol_logs.type = "animal_sighting" THEN 3
+                    WHEN patrol_logs.type = "water_source" THEN 2
+                    ELSE 1
+                END
+            ')
             ->get()
             ->pluck('count', 'statusFlag');
 
-        // Priority distribution
-        $priorityDistribution = (clone $query)
-            ->selectRaw('priorityFlag, COUNT(*) as count')
-            ->groupBy('priorityFlag')
+        // Priority buckets derived from severity (High/Medium/Low)
+        $priorityDistribution = (clone $base)
+            ->selectRaw('
+                CASE
+                    WHEN patrol_logs.type IN ("animal_mortality", "human_impact") THEN 0
+                    WHEN patrol_logs.type = "animal_sighting" THEN 1
+                    ELSE 2
+                END as priorityFlag,
+                COUNT(*) as count
+            ')
+            ->groupByRaw('
+                CASE
+                    WHEN patrol_logs.type IN ("animal_mortality", "human_impact") THEN 0
+                    WHEN patrol_logs.type = "animal_sighting" THEN 1
+                    ELSE 2
+                END
+            ')
             ->get()
             ->pluck('count', 'priorityFlag');
 
         // Incident types
-        $incidentTypes = (clone $query)
-            ->selectRaw('type, COUNT(*) as count')
-            ->groupBy('type')
+        $incidentTypes = (clone $base)
+            ->selectRaw('patrol_logs.type as type, COUNT(*) as count')
+            ->groupBy('patrol_logs.type')
             ->orderByDesc('count')
             ->get();
 
-        // Critical incidents (High/Medium priority, pending)
-        $criticalIncidents = (clone $query)
-            ->whereIn('priorityFlag', [0, 1]) // High or Medium
-            ->whereIn('statusFlag', [0, 3, 4]) // Pending
-            ->orderByDesc('dateFormat')
-            ->orderByDesc('time')
-            ->select('id', 'type', 'site_name', 'guard_name', 'dateFormat', 'priority', 'statusFlag')
-            ->get();
-
-        // Resolution time analysis
-        $resolutionTime = (clone $query)
-            ->where('statusFlag', 1) // Resolved
-            ->whereNotNull('adminActionDateTime')
+        // Critical incidents (severity >= 4)
+        $criticalIncidents = (clone $base)
+            ->whereIn('patrol_logs.type', ['animal_mortality', 'human_impact'])
+            ->orderByDesc('patrol_logs.created_at')
             ->selectRaw('
-                type,
-                AVG(DATEDIFF(adminActionDateTime, dateFormat)) as avg_days,
-                MAX(DATEDIFF(adminActionDateTime, dateFormat)) as max_days
+                patrol_logs.id,
+                patrol_logs.type,
+                site_geofences.site_name,
+                users.name as guard_name,
+                patrol_logs.created_at as dateFormat,
+                "High" as priority,
+                0 as statusFlag
             ')
-            ->groupBy('type')
+            ->limit(10)
             ->get();
 
-        // Incidents by site
-        $incidentsBySite = (clone $query)
+        // Resolution time analysis not available from patrol_logs
+        $resolutionTime = collect();
+
+        // Incidents by site (treat all as pending for this analytics view)
+        $incidentsBySite = (clone $base)
             ->selectRaw('
-                site_name,
+                patrol_sessions.site_id as site_id,
+                COALESCE(site_geofences.site_name, CONCAT("Site #", patrol_sessions.site_id)) as site_name,
                 COUNT(*) as incident_count,
-                SUM(CASE WHEN statusFlag = 1 THEN 1 ELSE 0 END) as resolved_count,
-                SUM(CASE WHEN statusFlag IN (0,3,4) THEN 1 ELSE 0 END) as pending_count
+                0 as resolved_count,
+                COUNT(*) as pending_count
             ')
-            ->groupBy('site_name')
+            ->groupBy('patrol_sessions.site_id', 'site_geofences.site_name')
             ->orderByDesc('incident_count')
+            ->limit(20)
             ->get()
-            ->map(function($site) {
-                $site->resolution_percentage = $site->incident_count > 0 
-                    ? round(($site->resolved_count / $site->incident_count) * 100, 1) 
-                    : 0;
+            ->map(function ($site) {
+                $site->resolution_percentage = 0;
                 return $site;
             });
 
