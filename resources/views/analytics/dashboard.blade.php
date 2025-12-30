@@ -24,6 +24,7 @@
 
         @php
             $tiles = [
+                ['/analytics/executive', 'Executive<br>Analytics'],
                 ['/patrol/foot-summary', 'Foot Patrolling<br>Summary'],
                 ['/patrol/foot-explorer', 'Foot Patrolling<br>Explorer'],
                 ['/patrol/night-summary', 'Night Patrolling<br>Summary'],

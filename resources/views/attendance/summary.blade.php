@@ -55,17 +55,28 @@
             <div class="card-header text-center fw-semibold">
                 Top 10 Attendance
             </div>
-            <table class="table table-bordered table-hover table-sm text-center mb-0 smart-sort">
-                <thead class="table-light">
+            <table class="table table-bordered table-hover table-sm mb-0 sortable-table">
+                <thead>
                     <tr>
-                        <th>Guard</th>
-                        <th data-type="number">Days Present</th>
+                        <th data-sortable>Guard</th>
+                        <th data-sortable data-type="number">Days Present</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($topAttendance as $t)
                     <tr>
-                        <td>{{ $t->name }}</td>
+                        <td>
+                            @php
+                                $guardUser = DB::table('users')->where('name', $t->name)->first();
+                            @endphp
+                            @if($guardUser)
+                                <a href="#" class="guard-name-link" data-guard-id="{{ $guardUser->id }}">
+                                    {{ \App\Helpers\FormatHelper::formatName($t->name) }}
+                                </a>
+                            @else
+                                {{ \App\Helpers\FormatHelper::formatName($t->name) }}
+                            @endif
+                        </td>
                         <td class="fw-bold text-success">{{ $t->days_present }}</td>
                     </tr>
                     @endforeach
@@ -79,17 +90,28 @@
             <div class="card-header text-center fw-semibold">
                 Top 10 Defaulters
             </div>
-            <table class="table table-bordered table-hover table-sm text-center mb-0 smart-sort">
-                <thead class="table-light">
+            <table class="table table-bordered table-hover table-sm mb-0 sortable-table">
+                <thead>
                     <tr>
-                        <th>Guard</th>
-                        <th data-type="number">Days Present</th>
+                        <th data-sortable>Guard</th>
+                        <th data-sortable data-type="number">Days Present</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($defaulters as $d)
                     <tr>
-                        <td>{{ $d->name }}</td>
+                        <td>
+                            @php
+                                $guardUser = DB::table('users')->where('name', $d->name)->first();
+                            @endphp
+                            @if($guardUser)
+                                <a href="#" class="guard-name-link" data-guard-id="{{ $guardUser->id }}">
+                                    {{ \App\Helpers\FormatHelper::formatName($d->name) }}
+                                </a>
+                            @else
+                                {{ \App\Helpers\FormatHelper::formatName($d->name) }}
+                            @endif
+                        </td>
                         <td class="fw-bold text-danger">{{ $d->days_present }}</td>
                     </tr>
                     @endforeach

@@ -5,6 +5,8 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use App\Http\Controllers\Traits\FilterDataTrait;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Blade;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -26,6 +28,11 @@ class AppServiceProvider extends ServiceProvider
         };
 
         $view->with($provider->filterData());
+    });
+
+    // Register Blade directive for formatting names
+    Blade::directive('formatName', function ($expression) {
+        return "<?php echo App\Helpers\FormatHelper::formatName($expression); ?>";
     });
 }
 }

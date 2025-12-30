@@ -7,98 +7,94 @@ use Illuminate\Support\Facades\DB;
 trait FilterDataTrait
 {
     /**
-     * Strict dependent global filters
-     * Range → Beat → Compartment
+     * Resolve Range → Beat → Compartment into SITE IDs
+     */
+    protected function resolveSiteIds(): array
+    {
+        $q = DB::table('site_details')->select('site_details.id');
+
+        // Range → client_details.id
+        if (request()->filled('range')) {
+            $q->where('site_details.client_id', request('range'));
+        }
+
+        // Beat → site_details.id
+        if (request()->filled('beat')) {
+            $q->where('site_details.id', request('beat'));
+        }
+
+        // Compartment → site_geofences.id → site_id
+        if (request()->filled('compartment')) {
+            $q->whereIn('site_details.id', function ($sub) {
+                $sub->select('site_id')
+                    ->from('site_geofences')
+                    ->where('id', request('compartment'));
+            });
+        }
+
+        return $q->pluck('id')->toArray();
+    }
+
+    /**
+     * Apply filters safely to ANY query that has site_id
+     */
+    protected function applyCanonicalFilters($query, string $dateColumn = null, string $siteColumn = 'site_id')
+    {
+        // Date
+        if ($dateColumn) {
+            if (request()->filled('start_date')) {
+                $query->whereDate($dateColumn, '>=', request('start_date'));
+            }
+            if (request()->filled('end_date')) {
+                $query->whereDate($dateColumn, '<=', request('end_date'));
+            }
+        }
+
+        // Site filter
+        if (
+            request()->filled('range') ||
+            request()->filled('beat') ||
+            request()->filled('compartment')
+        ) {
+            $siteIds = $this->resolveSiteIds();
+
+            if (empty($siteIds)) {
+                // HARD STOP – prevents silent empty bugs
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn($siteColumn, $siteIds);
+            }
+        }
+
+        return $query;
+    }
+
+    /**
+     * Data for global filter dropdowns
      */
     public function filterData(): array
     {
-        /* ===============================
-           RANGE (client_details ONLY)
-        =============================== */
         $ranges = DB::table('client_details')
             ->where('isActive', 1)
             ->orderBy('name')
-            ->pluck('name', 'id'); // id => name
+            ->pluck('name', 'id');
 
-        /* ===============================
-           BEAT (site_details via client_id)
-        =============================== */
         $beats = collect();
-
         if (request()->filled('range')) {
             $beats = DB::table('site_details')
                 ->where('client_id', request('range'))
                 ->orderBy('name')
-                ->pluck('name', 'id'); // id => name
+                ->pluck('name', 'id');
         }
 
-        /* ===============================
-           COMPARTMENT (site_geofences via site_id)
-        =============================== */
         $compartments = collect();
-
         if (request()->filled('beat')) {
             $compartments = DB::table('site_geofences')
                 ->where('site_id', request('beat'))
                 ->orderBy('name')
-                ->pluck('name', 'id'); // id => name
+                ->pluck('name', 'id');
         }
 
         return compact('ranges', 'beats', 'compartments');
     }
-
-    /**
-     * Apply filters to any query
-     */
-//     protected function applyFilters($query)
-// {
-//     if (request()->filled('start_date')) {
-//         $query->whereDate('patrol_sessions.started_at', '>=', request('start_date'));
-//     }
-
-//     if (request()->filled('end_date')) {
-//         $query->whereDate('patrol_sessions.started_at', '<=', request('end_date'));
-//     }
-
-//     if (request()->filled('range')) {
-//         $query->where('site_details.client_id', request('range'));
-//     }
-
-//     if (request()->filled('beat')) {
-//         $query->where('patrol_sessions.site_id', request('beat'));
-//     }
-
-//     if (request()->filled('compartment')) {
-//         $query->where('site_geofences.id', request('compartment'));
-//     }
-
-//     return $query;
-// }
-
-protected function applyGlobalFilters($query, array $map)
-{
-    if (request()->filled('start_date') && isset($map['date'])) {
-        $query->whereDate($map['date'], '>=', request('start_date'));
-    }
-
-    if (request()->filled('end_date') && isset($map['date'])) {
-        $query->whereDate($map['date'], '<=', request('end_date'));
-    }
-
-    if (request()->filled('range') && isset($map['range'])) {
-        $query->where($map['range'], request('range'));
-    }
-
-    if (request()->filled('beat') && isset($map['beat'])) {
-        $query->where($map['beat'], request('beat'));
-    }
-
-    if (request()->filled('compartment') && isset($map['compartment'])) {
-        $query->where($map['compartment'], request('compartment'));
-    }
-
-    return $query;
-}
-
-
 }

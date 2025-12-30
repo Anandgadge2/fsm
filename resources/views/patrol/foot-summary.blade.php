@@ -36,21 +36,29 @@
 <h5 class="mt-4 mb-2 fw-bold">Guard-wise Patrol Summary</h5>
 
 <div class="table-responsive">
-<table class="table table-bordered align-middle smart-sort">
-<thead class="table-light ">
-<tr >
-<th class="cursor-pointer">Guard</th>
-<th>Sessions</th>
-<th>Completed</th>
-<th>Ongoing</th>
-<th>Distance (km)</th>
-<th>KM / Hour</th>
+<table class="table table-bordered align-middle sortable-table">
+<thead>
+<tr>
+<th data-sortable>Guard</th>
+<th data-sortable data-type="number">Sessions</th>
+<th data-sortable data-type="number">Completed</th>
+<th data-sortable data-type="number">Ongoing</th>
+<th data-sortable data-type="number">Distance (km)</th>
+<th data-sortable data-type="number">KM / Hour</th>
 </tr>
 </thead>
 <tbody>
 @foreach($guardStats as $g)
 <tr>
-<td>{{ $g->guard }}</td>
+<td>
+    @if(isset($g->user_id))
+        <a href="#" class="guard-name-link" data-guard-id="{{ $g->user_id }}">
+            {{ \App\Helpers\FormatHelper::formatName($g->guard) }}
+        </a>
+    @else
+        {{ \App\Helpers\FormatHelper::formatName($g->guard) }}
+    @endif
+</td>
 <td>{{ $g->total_sessions }}</td>
 <td class="text-success">{{ $g->completed }}</td>
 <td class="text-warning">{{ $g->ongoing }}</td>
@@ -60,6 +68,10 @@
 @endforeach
 </tbody>
 </table>
+</div>
+
+<div class="mt-3">
+    {{ $guardStats->links('pagination::bootstrap-5') }}
 </div>
 
 {{-- Charts --}}

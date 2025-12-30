@@ -8,14 +8,6 @@
     <div class="explorer-header">
         <h4>Attendance Explorer</h4>
 
-        <form method="GET">
-            <select name="month" onchange="this.form.submit()" class="month-select">
-    @foreach(request()->except('month') as $k => $v)
-        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
-    @endforeach
-
-            </select>
-        </form>
     </div>
 
     <div class="explorer-layout">
@@ -23,16 +15,16 @@
         {{-- ================= TABLE ONLY SCROLLS ================= --}}
         <div class="dot-table-wrapper">
             <div class="dot-table-scroll">
-                <table class="dot-table smart-sort">
+                <table class="dot-table sortable-table">
                     <thead>
                         <tr>
-                            <th>User</th>
-                            <th>Range</th>
-                            <th>Beat</th>
-                            <th>Compartment</th>
-                            <th>Total</th>
+                            <th data-sortable>User</th>
+                            <th data-sortable>Range</th>
+                            <th data-sortable>Beat</th>
+                            <th data-sortable>Compartment</th>
+                            <th data-sortable>Total</th>
                             @for($d = 1; $d <= $daysInMonth; $d++)
-                                <th data-type="number">{{ $d }}</th>
+                                <th>{{ $d }}</th>
                             @endfor
                         </tr>
                     </thead>
@@ -43,7 +35,9 @@
                         <tr>
                             <td class="user-cell">
                                 <img src="{{ asset($user->profile_pic ?? 'images/user-placeholder.png') }}" class="user-avatar">
-                                <span class="user-name">{{ $user->name }}</span>
+                                <a href="#" class="guard-name-link user-name" data-guard-id="{{ $user->id }}">
+                                    {{ \App\Helpers\FormatHelper::formatName($user->name) }}
+                                </a>
                             </td>
 
                            <td>{{ $data['meta']['range'] ?? '-' }}</td>

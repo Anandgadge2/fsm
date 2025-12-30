@@ -46,6 +46,12 @@
         </a>
     </div>
 
+    {{-- KML/PATROL MAP --}}
+    <a href="/patrol/maps"
+       class="sidebar-link {{ request()->is('patrol/maps') ? 'active' : '' }}">
+        KML/Patrol Map
+    </a>
+
     {{-- ATTENDANCE --}}
     <div class="sidebar-section {{ request()->is('attendance*') ? 'open' : '' }}">
         <strong class="px-3 mt-2">Attendance</strong>

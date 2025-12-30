@@ -18,21 +18,32 @@
     <h5 class="mb-3">Foot Patrol Explorer</h5>
 
     <div class="table-responsive">
-        <table class="table table-hover align-middle smart-sort">
-            <thead class="table-light">
+        <table class="table table-hover align-middle sortable-table">
+            <thead>
                 <tr>
-                    <th>User</th>
-                    <th>Range</th>
-                    <th>Beat</th>
-                    <th>Start Time</th>
-                    <th>End Time</th>
-                    <th>Distance (KM)</th>
+                    <th data-sortable>User</th>
+                    <th data-sortable>Range</th>
+                    <th data-sortable>Beat</th>
+                    <th data-sortable>Start Time</th>
+                    <th data-sortable>End Time</th>
+                    <th data-sortable data-type="number">Distance (KM)</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($patrols as $p)
                     <tr>
-                        <td>{{ $p->user_name }}</td>
+                        <td>
+                            @php
+                                $guardUser = DB::table('users')->where('name', $p->user_name)->first();
+                            @endphp
+                            @if($guardUser)
+                                <a href="#" class="guard-name-link" data-guard-id="{{ $guardUser->id }}">
+                                    {{ \App\Helpers\FormatHelper::formatName($p->user_name) }}
+                                </a>
+                            @else
+                                {{ \App\Helpers\FormatHelper::formatName($p->user_name) }}
+                            @endif
+                        </td>
                         <td>{{ $p->range ?? '-' }}</td>
                         <td>{{ $p->beat ?? '-' }}</td>
                         <td>{{ \Carbon\Carbon::parse($p->started_at)->format('d M Y, H:i') }}</td>
