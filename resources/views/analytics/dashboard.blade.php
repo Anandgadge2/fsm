@@ -35,8 +35,7 @@
                 ['/reports/monthly', 'Monthly<br>Report'],
                 ['/reports/camera-tracking', 'Camera &<br>Tracking'],
                 ['/patrol/maps', 'KML / Patrol<br>Map'],
-                ['/reports/foot-report', 'Foot-Patrolling<br>Report'],
-                ['/reports/night-report', 'Night-Patrolling<br>Report'],
+                ['/reports/foot-report', 'Patrolling<br>Report'],
             ];
              $columns = 4; // Since you're using col-md-3 
         @endphp

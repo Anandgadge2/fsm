@@ -8,10 +8,15 @@
 <h5 class="p-3 text-center sidebar-title">AI Patrolling</h5>
 
 
-    {{-- MAIN DASHBOARD --}}
     <a href="/"
        class="sidebar-link {{ request()->routeIs('/') || request()->is('/') ? 'active' : '' }}">
         Main Dashboard
+    </a>
+
+    {{-- EXECUTIVE ANALYTICS --}}
+    <a href="/analytics/executive"
+       class="sidebar-link {{ request()->is('analytics/executive') ? 'active' : '' }}">
+        Executive Analytics
     </a>
 
     <hr>
@@ -100,13 +105,30 @@
         </a>
 
         <a href="/reports/foot-report"
-           class="sidebar-link {{ request()->is('reports/foot-report') ? 'active' : '' }}">
-            Foot Patrolling Report
-        </a>
-
-        <a href="/reports/night-report"
-           class="sidebar-link {{ request()->is('reports/night-report') ? 'active' : '' }}">
-            Night Patrolling Report
+           class="sidebar-link {{ request()->is('reports/foot-report') || request()->is('reports/night-report') ? 'active' : '' }}">
+            Patrolling Report
         </a>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+            // Restore scroll position
+            const savedPos = localStorage.getItem('sidebarScrollPos');
+            if (savedPos) {
+                sidebar.scrollTop = savedPos;
+            }
+
+            // Save scroll position on scroll
+            sidebar.addEventListener('scroll', function() {
+                localStorage.setItem('sidebarScrollPos', sidebar.scrollTop);
+            });
+            
+            // Allow active link to determine scroll if needed (optional enhancement)
+            // But user specifically asked to stay "where we made it for clicking", 
+            // so strict position restoration is best.
+        }
+    });
+</script>

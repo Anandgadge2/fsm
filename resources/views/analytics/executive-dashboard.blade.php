@@ -9,7 +9,7 @@
 
     {{-- Header --}}
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
+        <div class="bg-white p-2 shadow-sm border rounded">
             <h2 class="fw-bold mb-1">Executive Analytics Dashboard</h2>
             <p class="text-muted mb-0">
                 Comprehensive forest guard analytics including Patrol Efficiency, Attendance Reliability, and Incident Management.

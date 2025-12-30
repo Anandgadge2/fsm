@@ -8,27 +8,47 @@
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-md-3">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h5 class="mb-0">{{ number_format($efficiencyMetrics['avgDurationHours'], 2) }} hrs</h5>
-                            <small class="text-muted">Avg Patrol Duration</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Avg Duration</h6>
+                                <h4 class="mb-0 fw-bold text-primary">{{ number_format($efficiencyMetrics['avgDurationHours'], 2) }} hrs</h4>
+                            </div>
+                            <div class="text-primary opacity-50" style="font-size: 1.5rem;">
+                                <i class="bi bi-clock-history"></i>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h5 class="mb-0">{{ number_format($efficiencyMetrics['avgSpeedKmPerHour'], 2) }} km/h</h5>
-                            <small class="text-muted">Avg Speed</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Avg Speed</h6>
+                                <h4 class="mb-0 fw-bold text-info">{{ number_format($efficiencyMetrics['avgSpeedKmPerHour'], 2) }} km/h</h4>
+                            </div>
+                            <div class="text-info opacity-50" style="font-size: 1.5rem;">
+                                <i class="bi bi-speedometer2"></i>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h5 class="mb-0">{{ number_format($efficiencyMetrics['completionRate'], 1) }}%</h5>
-                            <small class="text-muted">Completion Rate</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Completion</h6>
+                                <h4 class="mb-0 fw-bold text-success">{{ number_format($efficiencyMetrics['completionRate'], 1) }}%</h4>
+                            </div>
+                            <div class="text-success opacity-50" style="font-size: 1.5rem;">
+                                <i class="bi bi-check-circle"></i>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h5 class="mb-0">{{ count($efficiencyMetrics['guardEfficiency']) }}</h5>
-                            <small class="text-muted">Active Guards</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Active Guards</h6>
+                                <h4 class="mb-0 fw-bold text-dark">{{ count($efficiencyMetrics['guardEfficiency']) }}</h4>
+                            </div>
+                            <div class="text-dark opacity-50" style="font-size: 1.5rem;">
+                                <i class="bi bi-person-badge"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -37,10 +57,10 @@
                         <thead class="table-light sticky-top">
                             <tr>
                                 <th data-sortable style="min-width: 150px;">Guard Name</th>
-                                <th data-sortable data-type="number" style="min-width: 80px;">Sessions</th>
-                                <th data-sortable data-type="number" style="min-width: 120px;">Total Distance</th>
-                                <th data-sortable data-type="number" style="min-width: 140px;">Avg Distance/Session</th>
-                                <th data-sortable data-type="number" style="min-width: 110px;">Avg Duration</th>
+                                <th data-sortable data-type="number" class="text-center" style="min-width: 80px;">Sessions</th>
+                                <th data-sortable data-type="number" class="text-center" style="min-width: 120px;">Total Distance</th>
+                                <th data-sortable data-type="number" class="text-center" style="min-width: 140px;">Avg Distance/Session</th>
+                                <th data-sortable data-type="number" class="text-center" style="min-width: 110px;">Avg Duration</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -59,10 +79,10 @@
                                         {{ \App\Helpers\FormatHelper::formatName($eff->name) }}
                                     @endif
                                 </td>
-                                <td>{{ $eff->session_count }}</td>
-                                <td>{{ number_format($eff->total_distance_km, 2) }} km</td>
-                                <td>{{ number_format($eff->avg_distance_per_session, 2) }} km</td>
-                                <td>{{ number_format($eff->avg_duration_hours, 2) }} hrs</td>
+                                <td class="text-center">{{ $eff->session_count }}</td>
+                                <td class="text-center">{{ number_format($eff->total_distance_km, 2) }} km</td>
+                                <td class="text-center">{{ number_format($eff->avg_distance_per_session, 2) }} km</td>
+                                <td class="text-center">{{ number_format($eff->avg_duration_hours, 2) }} hrs</td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -113,9 +133,7 @@
 /* Table row hover effects */
 .sticky-header tbody tr:hover {
     background-color: #f8f9fa;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease;
 }
 
 /* Guard name link styling */

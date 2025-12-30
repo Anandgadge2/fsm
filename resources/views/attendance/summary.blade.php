@@ -5,21 +5,48 @@
 {{-- ================= KPI ================= --}}
 <div class="row g-3 mb-4 fade-in">
     <div class="col-md-4">
-        <div class="kpi kpi-green">
-            <small>Present Guards</small>
-            <h2>{{ $present }}</h2>
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase small mb-1">Present Guards</h6>
+                        <h2 class="mb-0 fw-bold text-success">{{ $present }}</h2>
+                    </div>
+                    <div class="text-success" style="font-size: 2.5rem;">
+                        <i class="bi bi-person-check"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="kpi kpi-red">
-            <small>Absent Guards</small>
-            <h2>{{ $absent }}</h2>
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase small mb-1">Absent Guards</h6>
+                        <h2 class="mb-0 fw-bold text-danger">{{ $absent }}</h2>
+                    </div>
+                    <div class="text-danger" style="font-size: 2.5rem;">
+                        <i class="bi bi-person-dash"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="kpi kpi-dark">
-            <small>Total Guards</small>
-            <h2>{{ $total }}</h2>
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted text-uppercase small mb-1">Total Guards</h6>
+                        <h2 class="mb-0 fw-bold text-primary">{{ $total }}</h2>
+                    </div>
+                    <div class="text-primary" style="font-size: 2.5rem;">
+                        <i class="bi bi-people"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -62,7 +89,7 @@
                 <thead>
                     <tr>
                         <th data-sortable>Guard</th>
-                        <th data-sortable data-type="number">Days Present</th>
+                        <th data-sortable data-type="number" class="text-center">Days Present</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -80,7 +107,7 @@
                                 {{ \App\Helpers\FormatHelper::formatName($t->name) }}
                             @endif
                         </td>
-                        <td class="fw-bold text-success">{{ $t->days_present }}</td>
+                        <td class="fw-bold text-success text-center">{{ $t->days_present }}</td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -97,7 +124,7 @@
                 <thead>
                     <tr>
                         <th data-sortable>Guard</th>
-                        <th data-sortable data-type="number">Days Present</th>
+                        <th data-sortable data-type="number" class="text-center">Days Present</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -115,7 +142,7 @@
                                 {{ \App\Helpers\FormatHelper::formatName($d->name) }}
                             @endif
                         </td>
-                        <td class="fw-bold text-danger">{{ $d->days_present }}</td>
+                        <td class="fw-bold text-danger text-center">{{ $d->days_present }}</td>
                     </tr>
                     @endforeach
                 </tbody>
