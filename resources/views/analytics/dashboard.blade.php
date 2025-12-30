@@ -25,17 +25,15 @@
         @php
             $tiles = [
                 ['/analytics/executive', 'Executive<br>Analytics'],
+                ['/patrol/maps', 'KML / Patrol<br>Map'],
                 ['/patrol/foot-summary', 'Foot Patrolling<br>Summary'],
                 ['/patrol/foot-explorer', 'Foot Patrolling<br>Explorer'],
                 ['/patrol/night-summary', 'Night Patrolling<br>Summary'],
-                ['/attendance/summary', 'Attendance<br>Summary'],
                 ['/patrol/night-explorer', 'Night Patrolling<br>Explorer'],
-                ['/patrol/analytics', 'Patrol<br>Analytics'],
+                ['/attendance/summary', 'Attendance<br>Summary'],
                 ['/attendance/explorer', 'Attendance<br>Explorer'],
-                ['/reports/monthly', 'Monthly<br>Report'],
+                ['/reports/monthly', 'Reports'],
                 ['/reports/camera-tracking', 'Camera &<br>Tracking'],
-                ['/patrol/maps', 'KML / Patrol<br>Map'],
-                ['/reports/foot-report', 'Patrolling<br>Report'],
             ];
              $columns = 4; // Since you're using col-md-3 
         @endphp

@@ -96,17 +96,12 @@
 
         <a href="/reports/monthly"
            class="sidebar-link {{ request()->is('reports/monthly') ? 'active' : '' }}">
-            Monthly Report
+            Reports
         </a>
 
         <a href="/reports/camera-tracking"
            class="sidebar-link {{ request()->is('reports/camera-tracking') ? 'active' : '' }}">
             Camera & Tracking
-        </a>
-
-        <a href="/reports/foot-report"
-           class="sidebar-link {{ request()->is('reports/foot-report') || request()->is('reports/night-report') ? 'active' : '' }}">
-            Patrolling Report
         </a>
     </div>
 </div>

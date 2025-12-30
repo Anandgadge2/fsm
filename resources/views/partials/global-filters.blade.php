@@ -4,7 +4,7 @@
     <form method="GET" class="global-filter-grid">
 
         {{-- Keep other query params (pagination, sorting, etc.) --}}
-        @foreach(request()->except(['range','beat','compartment','user','start_date','end_date']) as $k => $v)
+        @foreach(request()->except(['range','beat','user','start_date','end_date']) as $k => $v)
             <input type="hidden" name="{{ $k }}" value="{{ $v }}">
         @endforeach
 
