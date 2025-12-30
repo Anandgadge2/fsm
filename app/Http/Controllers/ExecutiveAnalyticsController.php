@@ -44,11 +44,14 @@ class ExecutiveAnalyticsController extends Controller
     private function getKPIs(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         // Active Guards
-        $activeGuards = DB::table('users')
-            ->where('isActive', 1)
-            ->count();
+        $activeGuardsQuery = DB::table('users')->where('isActive', 1);
+        if ($userId) {
+            $activeGuardsQuery->where('id', $userId);
+        }
+        $activeGuards = $activeGuardsQuery->count();
 
         // Patrols
         $patrolQuery = DB::table('patrol_sessions')
@@ -57,6 +60,9 @@ class ExecutiveAnalyticsController extends Controller
         if (!empty($siteIds)) {
             $patrolQuery->whereIn('site_id', $siteIds);
         }
+        if ($userId) {
+            $patrolQuery->where('user_id', $userId);
+        }
 
         $totalPatrols = (clone $patrolQuery)->count();
         $completedPatrols = (clone $patrolQuery)->whereNotNull('ended_at')->count();
@@ -64,6 +70,7 @@ class ExecutiveAnalyticsController extends Controller
 
         // Distance
         $totalDistance = round((clone $patrolQuery)->whereNotNull('ended_at')->sum('distance') / 1000, 2);
+        // Avg distance depends on active filtered guards
         $avgDistancePerGuard = $activeGuards > 0 ? round($totalDistance / $activeGuards, 2) : 0;
 
         // Attendance
@@ -75,6 +82,10 @@ class ExecutiveAnalyticsController extends Controller
 
         if (request()->filled('range')) {
             $guardQuery->where('site_assign.client_id', request('range'));
+        }
+        
+        if ($userId) {
+            $guardQuery->where('users.id', $userId);
         }
 
         // Beat/Compartment filters resolve to site_details.id values.
@@ -92,13 +103,21 @@ class ExecutiveAnalyticsController extends Controller
             ->pluck('users.id');
 
         $totalGuardsForAttendance = $guardIds->count();
+        // If user filter is active but user not found in assignment logic, default to 0 to avoid div by zero, 
+        // or 1 if we assume the user exists but maybe has no assignment.
+        // If query returned 0, it means no valid assigned user found.
 
         $attendanceQuery = DB::table('attendance')
             ->whereBetween('dateFormat', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->whereIn('user_id', $guardIds);
 
         if (!empty($siteIds)) {
+            // Strict filtering by site actually logged
             $attendanceQuery->whereIn('site_id', $siteIds);
+        }
+        
+        if ($userId) {
+            $attendanceQuery->where('user_id', $userId);
         }
 
         $presentCount = (clone $attendanceQuery)
@@ -115,6 +134,9 @@ class ExecutiveAnalyticsController extends Controller
         
         if (!empty($siteIds)) {
             $incidentQuery->whereIn('site_id', $siteIds);
+        }
+        if ($userId) {
+             $incidentQuery->where('guard_id', $userId);
         }
 
         $totalIncidents = (clone $incidentQuery)->count();
@@ -152,6 +174,7 @@ class ExecutiveAnalyticsController extends Controller
     private function getGuardPerformanceRankings(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         // Get guard performance data
         $patrolQuery = DB::table('patrol_sessions')
@@ -162,6 +185,9 @@ class ExecutiveAnalyticsController extends Controller
 
         if (!empty($siteIds)) {
             $patrolQuery->whereIn('patrol_sessions.site_id', $siteIds);
+        }
+        if ($userId) {
+            $patrolQuery->where('patrol_sessions.user_id', $userId);
         }
 
         $guardPatrols = (clone $patrolQuery)
@@ -178,11 +204,13 @@ class ExecutiveAnalyticsController extends Controller
         $attendanceQuery = DB::table('attendance')
             ->join('users', 'attendance.user_id', '=', 'users.id')
             ->whereBetween('attendance.dateFormat', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->where('attendance.attendance_flag', 1)
             ->where('users.isActive', 1);
 
         if (!empty($siteIds)) {
             $attendanceQuery->whereIn('attendance.site_id', $siteIds);
+        }
+        if ($userId) {
+            $attendanceQuery->where('attendance.user_id', $userId);
         }
 
         $guardAttendance = (clone $attendanceQuery)
@@ -204,6 +232,9 @@ class ExecutiveAnalyticsController extends Controller
         if (!empty($siteIds)) {
             $incidentQuery->whereIn('incidence_details.site_id', $siteIds);
         }
+        if ($userId) {
+            $incidentQuery->where('incidence_details.guard_id', $userId);
+        }
 
         $guardIncidents = (clone $incidentQuery)
             ->selectRaw('
@@ -215,36 +246,16 @@ class ExecutiveAnalyticsController extends Controller
             ->get()
             ->keyBy('id');
 
-        // Calculate performance scores and merge data
-        $allGuards = collect();
-        foreach ($guardPatrols as $guard) {
-            $attendance = $guardAttendance->get($guard->id);
-            $incidents = $guardIncidents->get($guard->id);
-            
-            $daysPresent = $attendance ? $attendance->days_present : 0;
-            $incidentsReported = $incidents ? $incidents->incidents_reported : 0;
-            
-            // Performance score: (distance * 0.4) + (days_present * 10 * 0.3) + (incidents * 20 * 0.3)
-            $performanceScore = ($guard->total_distance_km * 0.4) + 
-                               ($daysPresent * 10 * 0.3) + 
-                               ($incidentsReported * 20 * 0.3);
-
-            $allGuards->push((object)[
-                'id' => $guard->id,
-                'name' => FormatHelper::formatName($guard->name),
-                'patrol_sessions' => $guard->patrol_sessions,
-                'total_distance_km' => $guard->total_distance_km,
-                'days_present' => $daysPresent,
-                'incidents_reported' => $incidentsReported,
-                'performance_score' => round($performanceScore, 1),
-            ]);
-        }
-
-        // Get full performance table with all guards (paginated)
-        $allActiveGuards = DB::table('users')
+        // Base List of Guards to Show
+        $allActiveGuardsQuery = DB::table('users')
             ->where('isActive', 1)
-            ->select('id', 'name')
-            ->get();
+            ->select('id', 'name');
+            
+        if ($userId) {
+            $allActiveGuardsQuery->where('id', $userId);
+        }
+        
+        $allActiveGuards = $allActiveGuardsQuery->get();
 
         $fullPerformance = collect();
         foreach ($allActiveGuards as $guard) {
@@ -267,20 +278,17 @@ class ExecutiveAnalyticsController extends Controller
             ]);
         }
 
-        // Sort (no pagination - dashboard should show full table with scroll)
+        // Sort 
         $sortedPerformance = $fullPerformance->sortByDesc('performance_score')->values();
 
         return [
-            'topPerformers' => $allGuards->sortByDesc('performance_score')->take(5)->values(),
+            'topPerformers' => $sortedPerformance->take(5)->values(),
             'fullPerformance' => $sortedPerformance,
         ];
     }
 
     private function getIncidentStatusTracking(Carbon $startDate, Carbon $endDate): array
     {
-        // Incident data source:
-        // The incident explorer uses patrol_logs (animal_sighting / water_source / human_impact / animal_mortality).
-        // incidence_details may be empty in your DB, which makes charts blank.
         $siteGeofences = DB::table('site_geofences')
             ->selectRaw('site_id, MAX(client_id) as client_id, MAX(site_name) as site_name')
             ->groupBy('site_id');
@@ -288,9 +296,7 @@ class ExecutiveAnalyticsController extends Controller
         $base = DB::table('patrol_logs')
             ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
             ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
-            ->leftJoinSub($siteGeofences, 'site_geofences', function ($join) {
-                $join->on('site_geofences.site_id', '=', 'patrol_sessions.site_id');
-            })
+            ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
             ->whereIn('patrol_logs.type', [
                 'animal_sighting',
                 'water_source',
@@ -302,10 +308,9 @@ class ExecutiveAnalyticsController extends Controller
                 $endDate->copy()->endOfDay()
             ]);
 
-        $this->applyCanonicalFilters($base, 'patrol_logs.created_at', 'patrol_sessions.site_id');
+        $this->applyCanonicalFilters($base, 'patrol_logs.created_at', 'patrol_sessions.site_id', 'patrol_sessions.user_id');
 
-        // Severity mapping consistent with IncidentController
-        // 5: animal_mortality, 4: human_impact, 3: animal_sighting, 2: water_source
+        // Distribution queries
         $statusDistribution = (clone $base)
             ->selectRaw('
                 CASE
@@ -317,19 +322,10 @@ class ExecutiveAnalyticsController extends Controller
                 END as statusFlag,
                 COUNT(*) as count
             ')
-            ->groupByRaw('
-                CASE
-                    WHEN patrol_logs.type = "animal_mortality" THEN 5
-                    WHEN patrol_logs.type = "human_impact" THEN 4
-                    WHEN patrol_logs.type = "animal_sighting" THEN 3
-                    WHEN patrol_logs.type = "water_source" THEN 2
-                    ELSE 1
-                END
-            ')
+            ->groupByRaw('statusFlag')
             ->get()
             ->pluck('count', 'statusFlag');
 
-        // Priority buckets derived from severity (High/Medium/Low)
         $priorityDistribution = (clone $base)
             ->selectRaw('
                 CASE
@@ -339,31 +335,23 @@ class ExecutiveAnalyticsController extends Controller
                 END as priorityFlag,
                 COUNT(*) as count
             ')
-            ->groupByRaw('
-                CASE
-                    WHEN patrol_logs.type IN ("animal_mortality", "human_impact") THEN 0
-                    WHEN patrol_logs.type = "animal_sighting" THEN 1
-                    ELSE 2
-                END
-            ')
+            ->groupByRaw('priorityFlag')
             ->get()
             ->pluck('count', 'priorityFlag');
 
-        // Incident types
         $incidentTypes = (clone $base)
             ->selectRaw('patrol_logs.type as type, COUNT(*) as count')
             ->groupBy('patrol_logs.type')
             ->orderByDesc('count')
             ->get();
 
-        // Critical incidents (severity >= 4)
         $criticalIncidents = (clone $base)
             ->whereIn('patrol_logs.type', ['animal_mortality', 'human_impact'])
             ->orderByDesc('patrol_logs.created_at')
             ->selectRaw('
                 patrol_logs.id,
                 patrol_logs.type,
-                site_geofences.site_name,
+                site_details.name as site_name,
                 users.name as guard_name,
                 patrol_logs.created_at as dateFormat,
                 "High" as priority,
@@ -372,19 +360,17 @@ class ExecutiveAnalyticsController extends Controller
             ->limit(10)
             ->get();
 
-        // Resolution time analysis not available from patrol_logs
         $resolutionTime = collect();
 
-        // Incidents by site (treat all as pending for this analytics view)
         $incidentsBySite = (clone $base)
             ->selectRaw('
                 patrol_sessions.site_id as site_id,
-                COALESCE(site_geofences.site_name, CONCAT("Site #", patrol_sessions.site_id)) as site_name,
+                site_details.name as site_name,
                 COUNT(*) as incident_count,
                 0 as resolved_count,
                 COUNT(*) as pending_count
             ')
-            ->groupBy('patrol_sessions.site_id', 'site_geofences.site_name')
+            ->groupBy('patrol_sessions.site_id', 'site_details.name')
             ->orderByDesc('incident_count')
             ->limit(20)
             ->get()
@@ -406,6 +392,7 @@ class ExecutiveAnalyticsController extends Controller
     private function getPatrolAnalytics(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         $query = DB::table('patrol_sessions')
             ->whereBetween('started_at', [$startDate, $endDate]);
@@ -413,8 +400,10 @@ class ExecutiveAnalyticsController extends Controller
         if (!empty($siteIds)) {
             $query->whereIn('site_id', $siteIds);
         }
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
 
-        // Patrol by type (with distance)
         $patrolByType = (clone $query)
             ->whereNotNull('ended_at')
             ->selectRaw('
@@ -425,13 +414,11 @@ class ExecutiveAnalyticsController extends Controller
             ->groupBy('type')
             ->get();
 
-        // Patrol by session
         $patrolBySession = (clone $query)
             ->selectRaw('session, COUNT(*) as count')
             ->groupBy('session')
             ->get();
 
-        // Foot vs Night patrols
         $footPatrols = (clone $query)->where('session', 'Foot')->count();
         $nightPatrols = (clone $query)
             ->where(function($q) {
@@ -440,7 +427,6 @@ class ExecutiveAnalyticsController extends Controller
             })
             ->count();
 
-        // Daily patrol trend
         $dailyTrend = (clone $query)
             ->whereNotNull('ended_at')
             ->selectRaw('
@@ -452,7 +438,6 @@ class ExecutiveAnalyticsController extends Controller
             ->orderBy('date')
             ->get();
 
-        // Distance by site
         $distanceBySite = (clone $query)
             ->join('site_details', 'patrol_sessions.site_id', '=', 'site_details.id')
             ->whereNotNull('patrol_sessions.ended_at')
@@ -478,6 +463,7 @@ class ExecutiveAnalyticsController extends Controller
     private function getAttendanceAnalytics(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         $query = DB::table('attendance')
             ->whereBetween('dateFormat', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
@@ -485,20 +471,21 @@ class ExecutiveAnalyticsController extends Controller
         if (!empty($siteIds)) {
             $query->whereIn('site_id', $siteIds);
         }
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
 
-        // Daily attendance trend
         $dailyTrend = (clone $query)
             ->selectRaw('
                 dateFormat as date,
-                SUM(CASE WHEN attendance_flag = 1 THEN 1 ELSE 0 END) as present,
-                SUM(CASE WHEN attendance_flag = 0 THEN 1 ELSE 0 END) as absent,
+                COUNT(DISTINCT user_id) as present,
+                0 as absent,
                 SUM(CASE WHEN lateTime IS NOT NULL AND lateTime > 0 THEN 1 ELSE 0 END) as late
             ')
             ->groupBy('dateFormat')
             ->orderBy('dateFormat')
             ->get();
 
-        // Late attendance analysis
         $lateAttendance = (clone $query)
             ->join('users', 'attendance.user_id', '=', 'users.id')
             ->whereNotNull('lateTime')
@@ -514,7 +501,6 @@ class ExecutiveAnalyticsController extends Controller
             ->limit(10)
             ->get();
 
-        // Attendance by site
         $attendanceBySite = (clone $query)
             ->join('site_details', 'attendance.site_id', '=', 'site_details.id')
             ->selectRaw('
@@ -536,6 +522,7 @@ class ExecutiveAnalyticsController extends Controller
     private function getTimeBasedPatterns(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         $query = DB::table('patrol_sessions')
             ->whereBetween('started_at', [$startDate, $endDate]);
@@ -543,15 +530,16 @@ class ExecutiveAnalyticsController extends Controller
         if (!empty($siteIds)) {
             $query->whereIn('site_id', $siteIds);
         }
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
 
-        // Hourly distribution
         $hourlyDistribution = (clone $query)
             ->selectRaw('HOUR(started_at) as hour, COUNT(*) as count')
             ->groupBy(DB::raw('HOUR(started_at)'))
             ->orderBy('hour')
             ->get();
 
-        // Peak patrol hours
         $peakHours = (clone $query)
             ->selectRaw('HOUR(started_at) as hour, COUNT(*) as count')
             ->groupBy(DB::raw('HOUR(started_at)'))
@@ -559,7 +547,6 @@ class ExecutiveAnalyticsController extends Controller
             ->limit(5)
             ->get();
 
-        // Day of week analysis
         $dayOfWeek = (clone $query)
             ->selectRaw('DAYNAME(started_at) as day_name, DAYOFWEEK(started_at) as day_num, COUNT(*) as count')
             ->groupBy('day_name', 'day_num')
@@ -576,6 +563,8 @@ class ExecutiveAnalyticsController extends Controller
     private function getRiskZoneAnalysis(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
+        // Note: Risk zone analysis typically focuses on SITES, but if a User is selected we might just show relevant sites.
 
         // High incident zones
         $incidentQuery = DB::table('incidence_details')
@@ -584,6 +573,9 @@ class ExecutiveAnalyticsController extends Controller
 
         if (!empty($siteIds)) {
             $incidentQuery->whereIn('site_id', $siteIds);
+        }
+        if ($userId) {
+            $incidentQuery->where('guard_id', $userId);
         }
 
         $highIncidentZones = (clone $incidentQuery)
@@ -598,7 +590,9 @@ class ExecutiveAnalyticsController extends Controller
             ->orderByDesc('incident_count')
             ->get();
 
-        // Coverage gaps (sites with no patrols)
+        // Coverage gaps (sites with no patrols) - harder to filter by User comfortably (does user X not patrolling site Y mean a gap? Maybe.)
+        // We will skip user filter on "All Sites" but apply to "Patrolled Sites" to see what the user missed?
+        // Let's keep it site-focused for now, maybe ignoring user filter for "All Sites" base.
         $allSites = DB::table('site_details')
             ->select('id', 'name');
         
@@ -609,16 +603,18 @@ class ExecutiveAnalyticsController extends Controller
 
         $patrolledSites = DB::table('patrol_sessions')
             ->whereBetween('started_at', [$startDate, $endDate])
-            ->whereNotNull('site_id')
-            ->distinct()
-            ->pluck('site_id')
-            ->toArray();
-
+            ->whereNotNull('site_id');
+            
         if (!empty($siteIds)) {
-            $patrolledSites = array_intersect($patrolledSites, $siteIds);
+             $patrolledSites->whereIn('site_id', $siteIds);
+        }
+        if ($userId) {
+            $patrolledSites->where('user_id', $userId);
         }
 
-        $coverageGaps = $allSites->whereNotIn('id', $patrolledSites)->values();
+        $patrolledSitesIds = $patrolledSites->distinct()->pluck('site_id')->toArray();
+
+        $coverageGaps = $allSites->whereNotIn('id', $patrolledSitesIds)->values();
 
         // Most patrolled sites
         $mostPatrolled = DB::table('patrol_sessions')
@@ -627,6 +623,9 @@ class ExecutiveAnalyticsController extends Controller
 
         if (!empty($siteIds)) {
             $mostPatrolled->whereIn('patrol_sessions.site_id', $siteIds);
+        }
+        if ($userId) {
+            $mostPatrolled->where('patrol_sessions.user_id', $userId);
         }
 
         $mostPatrolled = (clone $mostPatrolled)
@@ -646,6 +645,7 @@ class ExecutiveAnalyticsController extends Controller
     private function getCoverageAnalysis(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         $allSitesQuery = DB::table('site_details');
         if (!empty($siteIds)) {
@@ -655,15 +655,16 @@ class ExecutiveAnalyticsController extends Controller
 
         $patrolledSitesQuery = DB::table('patrol_sessions')
             ->whereBetween('started_at', [$startDate, $endDate])
-            ->whereNotNull('site_id')
-            ->distinct()
-            ->select('site_id');
-
+            ->whereNotNull('site_id');
+            
         if (!empty($siteIds)) {
             $patrolledSitesQuery->whereIn('site_id', $siteIds);
         }
+        if ($userId) {
+            $patrolledSitesQuery->where('user_id', $userId);
+        }
 
-        $sitesWithPatrols = $patrolledSitesQuery->count();
+        $sitesWithPatrols = $patrolledSitesQuery->distinct('site_id')->count('site_id');
         $coveragePercentage = $totalSites > 0 ? round(($sitesWithPatrols / $totalSites) * 100, 1) : 0;
 
         // Sites most patrolled
@@ -674,6 +675,9 @@ class ExecutiveAnalyticsController extends Controller
         if (!empty($siteIds)) {
             $sitesMostPatrolled->whereIn('patrol_sessions.site_id', $siteIds);
         }
+        if ($userId) {
+            $sitesMostPatrolled->where('patrol_sessions.user_id', $userId);
+        }
 
         $sitesMostPatrolled = (clone $sitesMostPatrolled)
             ->selectRaw('site_details.name as site_name, COUNT(*) as patrol_count')
@@ -682,11 +686,14 @@ class ExecutiveAnalyticsController extends Controller
             ->limit(10)
             ->get();
 
-        // Sites least patrolled
+        // Sites least patrolled query logic slightly complex with user filter, simplification:
         $sitesLeastPatrolled = DB::table('site_details')
-            ->leftJoin('patrol_sessions', function($join) use ($startDate, $endDate) {
+            ->leftJoin('patrol_sessions', function($join) use ($startDate, $endDate, $userId) {
                 $join->on('site_details.id', '=', 'patrol_sessions.site_id')
                      ->whereBetween('patrol_sessions.started_at', [$startDate, $endDate]);
+                if ($userId) {
+                     $join->where('patrol_sessions.user_id', $userId);
+                }
             })
             ->selectRaw('
                 site_details.name as site_name,
@@ -714,12 +721,16 @@ class ExecutiveAnalyticsController extends Controller
     private function getEfficiencyMetrics(Carbon $startDate, Carbon $endDate): array
     {
         $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
 
         $query = DB::table('patrol_sessions')
             ->whereBetween('started_at', [$startDate, $endDate]);
 
         if (!empty($siteIds)) {
             $query->whereIn('site_id', $siteIds);
+        }
+        if ($userId) {
+             $query->where('user_id', $userId);
         }
 
         // Average patrol duration

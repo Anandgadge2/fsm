@@ -29,29 +29,29 @@ class GuardDetailController extends Controller
 
            /* ================= ATTENDANCE (LAST MONTH – CANONICAL) ================= */
 
-$attendanceBase = DB::table('attendance')
-    ->where('user_id', $guardId)
-    ->whereBetween('dateFormat', [$startOfLastMonth, $endOfLastMonth]);
+            $attendanceBase = DB::table('attendance')
+                ->where('user_id', $guardId)
+                ->whereBetween('dateFormat', [$startOfLastMonth, $endOfLastMonth]);
 
-$presentDays = (clone $attendanceBase)
-    ->select('dateFormat')
-    ->distinct()
-    ->count('dateFormat');
-$totalDays = $presentDays;
+            $presentDays = (clone $attendanceBase)
+                ->select('dateFormat')
+                ->distinct()
+                ->count('dateFormat');
+            $totalDays = $presentDays;
 
-$daysInMonth = Carbon::parse($startOfLastMonth)->daysInMonth;
+            $daysInMonth = Carbon::parse($startOfLastMonth)->daysInMonth;
 
-$absentDays = max($daysInMonth - $presentDays, 0);
+            $absentDays = max($daysInMonth - $presentDays, 0);
 
-$lateDays = (clone $attendanceBase)
-    ->whereNotNull('lateTime')
-    ->whereRaw('CAST(lateTime AS UNSIGNED) > 0')
-    ->distinct('dateFormat')
-    ->count('dateFormat');
+            $lateDays = (clone $attendanceBase)
+                ->whereNotNull('lateTime')
+                ->whereRaw('CAST(lateTime AS UNSIGNED) > 0')
+                ->distinct('dateFormat')
+                ->count('dateFormat');
 
-$attendanceRate = $daysInMonth > 0
-    ? round(($presentDays / $daysInMonth) * 100, 1)
-    : 0;
+            $attendanceRate = $daysInMonth > 0
+                ? round(($presentDays / $daysInMonth) * 100, 1)
+                : 0;
 
             /* ================= PATROL STATS ================= */
             $patrolBase = DB::table('patrol_sessions')
@@ -95,111 +95,77 @@ $attendanceRate = $daysInMonth > 0
                 ->where('guard_id', $guardId)
                 ->count();
 
-            /* ================= PATROL PATHS (FRONTEND SAFE) ================= */
-            $patrolPaths = DB::table('patrol_sessions')
+            /* ================= PATROL PATHS ================= */
+
+            $patrolSessions = DB::table('patrol_sessions')
                 ->where('user_id', $guardId)
-                ->whereNotNull('path_geojson')
                 ->orderByDesc('started_at')
                 ->limit(10)
-                ->get()
-                ->map(function ($p) {
-                    return [
-                        'id'           => $p->id,
-                        'path_geojson' => $p->path_geojson,
+                ->get();
 
-                        // IMPORTANT: frontend expects these
-                        'started_at' => $p->started_at
-                            ? Carbon::parse($p->started_at)->toDateTimeString()
-                            : null,
+            $patrolPaths = $patrolSessions->map(function ($p) {
 
-                        'ended_at' => $p->ended_at
-                            ? Carbon::parse($p->ended_at)->toDateTimeString()
-                            : null,
+                $path = null;
 
-                        'start_lat' => $p->start_lat,
-                        'start_lng' => $p->start_lng,
-                        'end_lat'   => $p->end_lat,
-                        'end_lng'   => $p->end_lng,
+                /* ================= 1️⃣ USE path_geojson IF PRESENT ================= */
+                if (!empty($p->path_geojson)) {
+                    $path = $p->path_geojson;
+                }
 
-                        // distance in METERS (frontend divides)
-                        'distance' => (float) ($p->distance ?? 0),
+                /* ================= 2️⃣ BUILD FROM patrol_logs ================= */
+                else {
+                    $logs = DB::table('patrol_logs')
+                        ->where('patrol_session_id', $p->id)
+                        ->whereNotNull('lat')
+                        ->whereNotNull('lng')
+                        ->orderBy('created_at')
+                        ->get(['lat', 'lng']);
 
-                        'session' => $p->session,
-                        'type'    => $p->type,
-                    ];
-                });
+                    if ($logs->count() >= 2) {
+                        $path = json_encode([
+                            'type' => 'LineString',
+                            'coordinates' => $logs->map(fn ($l) => [
+                                (float) $l->lng,
+                                (float) $l->lat
+                            ])->toArray()
+                        ]);
+                    }
+                }
 
-                /* ================= PATROL PATHS (SMART SOURCE) ================= */
+                /* ================= 3️⃣ FALLBACK: START → END ================= */
+                if (!$path && $p->start_lat && $p->start_lng && $p->end_lat && $p->end_lng) {
+                    $path = json_encode([
+                        'type' => 'LineString',
+                        'coordinates' => [
+                            [(float) $p->start_lng, (float) $p->start_lat],
+                            [(float) $p->end_lng,   (float) $p->end_lat],
+                        ]
+                    ]);
+                }
 
-$patrolSessions = DB::table('patrol_sessions')
-    ->where('user_id', $guardId)
-    ->orderByDesc('started_at')
-    ->limit(10)
-    ->get();
+                /* ================= DROP IF STILL NO PATH ================= */
+                if (!$path) return null;
 
-$patrolPaths = $patrolSessions->map(function ($p) {
-
-    $path = null;
-
-    /* ================= 1️⃣ USE path_geojson IF PRESENT ================= */
-    if (!empty($p->path_geojson)) {
-        $path = $p->path_geojson;
-    }
-
-    /* ================= 2️⃣ BUILD FROM patrol_logs ================= */
-    else {
-        $logs = DB::table('patrol_logs')
-            ->where('patrol_session_id', $p->id)
-            ->whereNotNull('lat')
-            ->whereNotNull('lng')
-            ->orderBy('created_at')
-            ->get(['lat', 'lng']);
-
-        if ($logs->count() >= 2) {
-            $path = json_encode([
-                'type' => 'LineString',
-                'coordinates' => $logs->map(fn ($l) => [
-                    (float) $l->lng,
-                    (float) $l->lat
-                ])->toArray()
-            ]);
-        }
-    }
-
-    /* ================= 3️⃣ FALLBACK: START → END ================= */
-    if (!$path && $p->start_lat && $p->start_lng && $p->end_lat && $p->end_lng) {
-        $path = json_encode([
-            'type' => 'LineString',
-            'coordinates' => [
-                [(float) $p->start_lng, (float) $p->start_lat],
-                [(float) $p->end_lng,   (float) $p->end_lat],
-            ]
-        ]);
-    }
-
-    /* ================= DROP IF STILL NO PATH ================= */
-    if (!$path) return null;
-
-    return [
-        'id'           => $p->id,
-        'path_geojson' => $path,
-        'started_at'   => $p->started_at
-            ? Carbon::parse($p->started_at)->toDateTimeString()
-            : null,
-        'ended_at'     => $p->ended_at
-            ? Carbon::parse($p->ended_at)->toDateTimeString()
-            : null,
-        'start_lat'    => $p->start_lat,
-        'start_lng'    => $p->start_lng,
-        'end_lat'      => $p->end_lat,
-        'end_lng'      => $p->end_lng,
-        'distance'     => (float) ($p->distance ?? 0),
-        'session'      => $p->session,
-        'type'         => $p->type,
-    ];
-})
-->filter()   // remove nulls
-->values();
+                return [
+                    'id'           => $p->id,
+                    'path_geojson' => $path,
+                    'started_at'   => $p->started_at
+                        ? Carbon::parse($p->started_at)->toDateTimeString()
+                        : null,
+                    'ended_at'     => $p->ended_at
+                        ? Carbon::parse($p->ended_at)->toDateTimeString()
+                        : null,
+                    'start_lat'    => $p->start_lat,
+                    'start_lng'    => $p->start_lng,
+                    'end_lat'      => $p->end_lat,
+                    'end_lng'      => $p->end_lng,
+                    'distance'     => (float) ($p->distance ?? 0),
+                    'session'      => $p->session,
+                    'type'         => $p->type,
+                ];
+            })
+            ->filter()   // remove nulls
+            ->values();
 
 
             /* ================= RESPONSE ================= */

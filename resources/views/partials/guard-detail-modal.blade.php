@@ -282,15 +282,20 @@ function initGuardMap(paths) {
 
     const focusLayers = [];
 
-    paths.forEach(p => {
+    const colors = ['#28a745', '#e91e63', '#9c27b0', '#2196f3', '#00bcd4', '#4caf50', '#ff9800', '#f44336', '#3cb44b', '#f58231'];
+
+    paths.forEach((p, index) => {
         const geo = normalizePathGeoJson(p.path_geojson);
         if (!geo || !geo.coordinates || geo.coordinates.length < 2) return;
 
         const coords = geo.coordinates.map(c => [c[1], c[0]]);
 
+        // Dynamic Color
+        const color = colors[(p.id || index) % colors.length];
+
         // Highlight path
         const mainPath = L.polyline(coords, {
-            color: '#6f2dbd',
+            color: color,
             weight: 6,
             opacity: 0.95,
             lineCap: 'round',
@@ -318,7 +323,7 @@ mainPath.on('click', () => {
 });
         // // Glow layer
         L.polyline(coords, {
-    color: '#c77dff',
+    color: color,
     weight: 12,
     opacity: 0.25,
     interactive: false   // ⭐ IMPORTANT
@@ -352,10 +357,10 @@ mainPath.on('click', () => {
                 }).addTo(guardMapInstance)
             );
 
-            L.polyline(
-                [[p.start_lat, p.start_lng], [p.end_lat, p.end_lng]],
-                { color: '#6c757d', dashArray: '6,6', weight: 2 }
-            ).addTo(guardMapInstance);
+            // L.polyline(
+            //     [[p.start_lat, p.start_lng], [p.end_lat, p.end_lng]],
+            //     { color: '#6c757d', dashArray: '6,6', weight: 2 }
+            // ).addTo(guardMapInstance);
         }
     });
 

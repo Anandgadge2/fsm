@@ -7,7 +7,10 @@ use Illuminate\Support\Facades\DB;
 trait FilterDataTrait
 {
     /**
-     * Resolve Range → Beat → Compartment into SITE IDs
+     * Resolve Range → Beat → User → SITE IDs
+     * (Kept for compatibility, though site filtering might not depend on user selection directly
+     * unless we want to show sites assigned to that user.
+     * For now, we filter DATA by user_id separately.)
      */
     protected function resolveSiteIds(): array
     {
@@ -23,22 +26,13 @@ trait FilterDataTrait
             $q->where('site_details.id', request('beat'));
         }
 
-        // Compartment → site_geofences.id → site_id
-        if (request()->filled('compartment')) {
-            $q->whereIn('site_details.id', function ($sub) {
-                $sub->select('site_id')
-                    ->from('site_geofences')
-                    ->where('id', request('compartment'));
-            });
-        }
-
         return $q->pluck('id')->toArray();
     }
 
     /**
-     * Apply filters safely to ANY query that has site_id
+     * Apply filters safely to ANY query that has site_id and user_id
      */
-    protected function applyCanonicalFilters($query, string $dateColumn = null, string $siteColumn = 'site_id')
+    protected function applyCanonicalFilters($query, string $dateColumn = null, string $siteColumn = 'site_id', string $userColumn = 'users.id')
     {
         // Date
         if ($dateColumn) {
@@ -50,12 +44,8 @@ trait FilterDataTrait
             }
         }
 
-        // Site filter
-        if (
-            request()->filled('range') ||
-            request()->filled('beat') ||
-            request()->filled('compartment')
-        ) {
+        // Site filter (Range/Beat)
+        if (request()->filled('range') || request()->filled('beat')) {
             $siteIds = $this->resolveSiteIds();
 
             if (empty($siteIds)) {
@@ -66,6 +56,11 @@ trait FilterDataTrait
             }
         }
 
+        // User Filter
+        if (request()->filled('user')) {
+             $query->where($userColumn, request('user'));
+        }
+
         return $query;
     }
 
@@ -74,11 +69,13 @@ trait FilterDataTrait
      */
     public function filterData(): array
     {
+        // 1. Ranges
         $ranges = DB::table('client_details')
             ->where('isActive', 1)
             ->orderBy('name')
             ->pluck('name', 'id');
 
+        // 2. Beats (Depend on Range)
         $beats = collect();
         if (request()->filled('range')) {
             $beats = DB::table('site_details')
@@ -87,14 +84,33 @@ trait FilterDataTrait
                 ->pluck('name', 'id');
         }
 
-        $compartments = collect();
+        // 3. Users (Depend on Beat OR Range)
+        // logic:
+        // - if beat selected: show users assigned to that beat
+        // - if range selected (and beat not selected or "All"): show users assigned to that range
+        $users = collect();
+        
         if (request()->filled('beat')) {
-            $compartments = DB::table('site_geofences')
-                ->where('site_id', request('beat'))
-                ->orderBy('name')
-                ->pluck('name', 'id');
+            // Users in this specific Beat
+            $users = DB::table('site_assign')
+                ->join('users', 'users.id', '=', 'site_assign.user_id')
+                ->whereRaw('FIND_IN_SET(?, site_assign.site_id)', [request('beat')])
+                ->where('users.isActive', 1)
+                ->orderBy('users.name')
+                ->distinct()
+                ->pluck('users.name', 'users.id');
+
+        } elseif (request()->filled('range')) {
+            // Users in this Range (Client) - regardless of beat
+            $users = DB::table('site_assign')
+                ->join('users', 'users.id', '=', 'site_assign.user_id')
+                ->where('site_assign.client_id', request('range'))
+                ->where('users.isActive', 1)
+                ->orderBy('users.name')
+                ->distinct()
+                ->pluck('users.name', 'users.id');
         }
 
-        return compact('ranges', 'beats', 'compartments');
+        return compact('ranges', 'beats', 'users');
     }
 }

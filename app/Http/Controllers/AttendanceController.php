@@ -6,6 +6,7 @@ use App\Http\Controllers\Traits\FilterDataTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 
 class AttendanceController extends Controller
 {
@@ -148,144 +149,173 @@ class AttendanceController extends Controller
        EXPLORER
     ============================================================ */
     public function explorer(Request $request)
-{
-    $month = $request->get('month', now()->format('Y-m'));
-    $startDate = Carbon::parse($month . '-01')->startOfDay();
-    $endDate   = Carbon::parse($month . '-01')->endOfMonth()->endOfDay();
-    $daysInMonth = $startDate->daysInMonth;
-
-    /* ================= USERS + ASSIGN ================= */
-
-    $siteIds = $this->resolveSiteIds();
-
-    $usersQuery = DB::table('users')
-        ->join('site_assign', 'users.id', '=', 'site_assign.user_id')
-        ->where('users.isActive', 1);
-
-    if ($request->filled('range')) {
-        $usersQuery->where('site_assign.client_id', $request->range);
-    }
-
-    // Beat/Compartment both resolve to site_details.id values (siteIds)
-    // site_assign.site_id is CSV; filter via FIND_IN_SET.
-    if (!empty($siteIds)) {
-        $usersQuery->where(function ($q) use ($siteIds) {
-            foreach ($siteIds as $sid) {
-                $q->orWhereRaw('FIND_IN_SET(?, site_assign.site_id)', [$sid]);
-            }
-        });
-    }
-
-    $users = $usersQuery
-        ->select(
-            'users.id',
-            'users.name',
-            'users.profile_pic',
-            'site_assign.client_name as range',
-            'site_assign.site_id',
-            'site_assign.site_name'
-        )
-        ->get()
-        ->keyBy('id');
-
-    if ($users->isEmpty()) {
-        return view('attendance.explorer', array_merge(
-            $this->filterData(),
-            compact('users')
-        ));
-    }
-
-    /* ================= BEAT MAP ================= */
-
-    $userBeatMap = [];
-    foreach ($users as $u) {
-        $beatIds = array_filter(explode(',', $u->site_id));
-        $userBeatMap[$u->id] = (int) ($request->beat ?? $beatIds[0] ?? null);
-    }
-
-    /* ================= COMPARTMENT MAP ================= */
-
-    $compartmentMap = DB::table('site_geofences')
-        ->whereIn('site_id', array_values($userBeatMap))
-        ->orderBy('id')
-        ->get()
-        ->groupBy('site_id')
-        ->map(fn ($rows) => $rows->first()->name);
-
-    /* ================= ATTENDANCE ================= */
-
-    $attendance = DB::table('attendance')
-        ->whereBetween('dateFormat', [
-            $startDate->toDateString(),
-            $endDate->toDateString()
-        ])
-        ->whereIn('user_id', $users->keys())
-        ->where('attendance_flag', 1)
-        ->select('user_id', 'dateFormat')
-        ->get()
-        ->groupBy(fn ($r) => $r->user_id . '_' . $r->dateFormat);
-
-    /* ================= GRID ================= */
-
-    $grid = [];
-
-    foreach ($users as $user) {
-
-        $presentCount = 0;
-
-        for ($d = 1; $d <= $daysInMonth; $d++) {
-            $date = $startDate->copy()->day($d)->toDateString();
-            $key = $user->id . '_' . $date;
-
-            $present = isset($attendance[$key]);
-            if ($present) $presentCount++;
-
-            $grid[$user->id]['days'][$d] = compact('present');
+    {
+        // Prioritize explicit start/end dates from filters
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = Carbon::parse($request->start_date)->startOfDay();
+            $endDate   = Carbon::parse($request->end_date)->endOfDay();
+        } else {
+            // Default to current month if no filters
+            $month = $request->get('month', now()->format('Y-m'));
+            $startDate = Carbon::parse($month . '-01')->startOfDay();
+            $endDate   = Carbon::parse($month . '-01')->endOfMonth()->endOfDay();
         }
 
-        $beatId = $userBeatMap[$user->id];
+        // Generate Dates Array for Column Headers
+        $datePeriod = CarbonPeriod::create($startDate, $endDate);
+        $dates = [];
+        foreach ($datePeriod as $d) {
+            $dates[] = $d->copy();
+        }
+        $totalDaysInRange = count($dates);
 
-        $grid[$user->id]['user'] = $user;
-        $grid[$user->id]['meta'] = [
-            'range'       => $user->range ?? '-',
-            'beat'        => $user->site_name ?? '-',
-            'compartment' => $compartmentMap[$beatId] ?? '-',
-        ];
-        $grid[$user->id]['summary'] = [
-            'present' => $presentCount,
-            'total'   => $daysInMonth,
-        ];
+        /* ================= USERS + ASSIGN ================= */
+
+        // Use standard filter resolution (Range -> Beat -> User)
+        $siteIds = $this->resolveSiteIds();
+        $userId = request('user');
+
+        $usersQuery = DB::table('users')
+            ->join('site_assign', 'users.id', '=', 'site_assign.user_id')
+            ->where('users.isActive', 1);
+
+        if ($request->filled('range')) {
+            $usersQuery->where('site_assign.client_id', $request->range);
+        }
+        
+        // Handle CSV site_id in site_assign
+        if (!empty($siteIds)) {
+            $usersQuery->where(function ($q) use ($siteIds) {
+                foreach ($siteIds as $sid) {
+                    $q->orWhereRaw('FIND_IN_SET(?, site_assign.site_id)', [$sid]);
+                }
+            });
+        }
+        
+        if ($userId) {
+            $usersQuery->where('users.id', $userId);
+        }
+
+        $users = $usersQuery
+            ->select(
+                'users.id',
+                'users.name',
+                'users.profile_pic',
+                'site_assign.client_name as range',
+                'site_assign.site_id',
+                'site_assign.site_name'
+            )
+            ->distinct('users.id') // prevent duplicates if joined multiple times
+            ->get()
+            ->keyBy('id');
+
+        if ($users->isEmpty()) {
+            return view('attendance.explorer', array_merge(
+                $this->filterData(),
+                [
+                    'users' => $users,
+                    'dates' => $dates,
+                    'totalDaysInRange' => $totalDaysInRange,
+                    'startDate' => $startDate,
+                    'endDate' => $endDate
+                ]
+            ));
+        }
+
+        /* ================= BEAT MAP ================= */
+
+        $userBeatMap = [];
+        foreach ($users as $u) {
+            $beatIds = array_filter(explode(',', $u->site_id));
+            $userBeatMap[$u->id] = (int) ($request->beat ?? $beatIds[0] ?? null);
+        }
+
+        /* ================= COMPARTMENT MAP ================= */
+
+        $compartmentMap = DB::table('site_geofences')
+            ->whereIn('site_id', array_values($userBeatMap))
+            ->orderBy('id')
+            ->get()
+            ->groupBy('site_id')
+            ->map(fn ($rows) => $rows->first()->name);
+
+        /* ================= ATTENDANCE ================= */
+
+        $attendance = DB::table('attendance')
+            ->whereBetween('dateFormat', [
+                $startDate->toDateString(),
+                $endDate->toDateString()
+            ])
+            ->whereIn('user_id', $users->keys())
+            ->select('user_id', 'dateFormat')
+            ->get()
+            ->groupBy(fn ($r) => $r->user_id . '_' . $r->dateFormat);
+
+        /* ================= GRID ================= */
+
+        $grid = [];
+
+        foreach ($users as $user) {
+            $presentCount = 0;
+            $dayData = [];
+
+            // Iterate over generated dates
+            foreach ($dates as $dt) {
+                $dateStr = $dt->toDateString();
+                $key = $user->id . '_' . $dateStr;
+
+                $present = isset($attendance[$key]);
+                if ($present) $presentCount++;
+
+                $dayData[$dateStr] = compact('present');
+            }
+
+            $beatId = $userBeatMap[$user->id];
+
+            $grid[$user->id]['user'] = $user;
+            $grid[$user->id]['meta'] = [
+                'range'       => $user->range ?? '-',
+                'beat'        => $user->site_name ?? '-',
+                'compartment' => $compartmentMap[$beatId] ?? '-',
+            ];
+            $grid[$user->id]['days'] = $dayData;
+            $grid[$user->id]['summary'] = [
+                'present' => $presentCount,
+                'total'   => $totalDaysInRange,
+            ];
+        }
+
+        /* ================= KPIs ================= */
+
+        $totalPresent = collect($grid)->sum(fn ($g) => $g['summary']['present']);
+        $totalPossibleDays = count($users) * $totalDaysInRange;
+        $totalAbsent = $totalPossibleDays - $totalPresent;
+        $presentPct = $totalPossibleDays > 0
+            ? round(($totalPresent / $totalPossibleDays) * 100, 2)
+            : 0;
+
+        $months = DB::table('attendance')
+            ->selectRaw("DATE_FORMAT(dateFormat,'%Y-%m') as ym")
+            ->distinct()
+            ->orderByDesc('ym')
+            ->pluck('ym');
+
+        return view('attendance.explorer', array_merge(
+            $this->filterData(),
+            [
+                'grid' => $grid,
+                'dates' => $dates,
+                'totalDaysInRange' => $totalDaysInRange,
+                'presentPct' => $presentPct,
+                'totalPresent' => $totalPresent,
+                'totalAbsent' => $totalAbsent,
+                'totalDays' => $totalPossibleDays,
+                'months' => $months,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+            ]
+        ));
     }
-
-    /* ================= KPIs ================= */
-
-    $totalPresent = collect($grid)->sum(fn ($g) => $g['summary']['present']);
-    $totalDays = count($users) * $daysInMonth;
-    $totalAbsent = $totalDays - $totalPresent;
-    $presentPct = $totalDays
-        ? round(($totalPresent / $totalDays) * 100, 2)
-        : 0;
-
-    $months = DB::table('attendance')
-        ->selectRaw("DATE_FORMAT(dateFormat,'%Y-%m') as ym")
-        ->distinct()
-        ->orderByDesc('ym')
-        ->pluck('ym');
-
-    return view('attendance.explorer', array_merge(
-        $this->filterData(),
-        compact(
-            'grid',
-            'daysInMonth',
-            'presentPct',
-            'totalPresent',
-            'totalAbsent',
-            'totalDays',
-            'months',
-            'month'
-        )
-    ));
-}
 
 
 }
