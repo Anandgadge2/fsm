@@ -210,9 +210,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="sessionModalBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
+            
         </div>
     </div>
 </div>
@@ -755,18 +753,6 @@ function showEnhancedSessionDetails(session, sessionId) {
                     </div>
                 </div>
             </div>
-            
-            <!-- Action Buttons -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-primary" onclick="zoomToSession(${sessionId})">
-                            <i class="bi bi-zoom-in"></i> Zoom on Map
-                        </button>
-                                   
-                    </div>
-                </div>
-            </div>
         </div>
     `;
 
@@ -778,7 +764,7 @@ function showEnhancedSessionDetails(session, sessionId) {
     
     // Create new modal instance
     sessionDetailsModal = new bootstrap.Modal(modalEl, {
-        backdrop: 'static',  // Use static backdrop to prevent issues
+        backdrop: 'true',  // Use static backdrop to prevent issues
         keyboard: true,
         focus: true
     });
@@ -1103,6 +1089,10 @@ if (sortSelect) {
 </script>
 
 <style>
+
+    .modal-backdrop{
+        z-index: 1 !important;
+    }
     
 .session-card {
     transition: all 0.2s ease;

@@ -32,11 +32,14 @@ class AttendanceController extends Controller
 
        $this->applyCanonicalFilters(
     $usersQuery,
-    'attendance.dateFormat' // date column
+    null // date column (users query does not join attendance)
 );
 
         $users = $usersQuery->pluck('users.id');
         $totalGuards = $users->count();
+
+        // Map ID to Name for detailed lists
+        $userNames = $usersQuery->pluck('users.name', 'users.id');
 
         /* ============================================================
            ATTENDANCE (ONLY PRESENCE LOGS)
@@ -71,16 +74,31 @@ class AttendanceController extends Controller
         $cursor = $startDate->copy();
 
         while ($cursor <= $endDate) {
-            $presentCount = $attendance
+            $dailyPresentIds = $attendance
                 ->where('dateFormat', $cursor->toDateString())
                 ->pluck('user_id')
-                ->unique()
-                ->count();
+                ->unique();
+            
+            $presentCount = $dailyPresentIds->count();
+            
+            // Get Objects
+            $dailyPresentList = $dailyPresentIds->map(fn($id) => [
+                'id' => $id,
+                'name' => $userNames[$id] ?? "Unknown ($id)"
+            ])->values()->toArray();
+            
+            $dailyAbsentIds = $users->diff($dailyPresentIds);
+            $dailyAbsentList = $dailyAbsentIds->map(fn($id) => [
+                'id' => $id,
+                'name' => $userNames[$id] ?? "Unknown ($id)"
+            ])->values()->toArray();
 
             $daily->push([
-                'date'    => $cursor->format('d M'),
-                'present' => $presentCount,
-                'absent'  => max(0, $totalGuards - $presentCount),
+                'date'          => $cursor->format('d M'),
+                'present'       => $presentCount,
+                'absent'        => max(0, $totalGuards - $presentCount),
+                'present_list'  => $dailyPresentList,
+                'absent_list'   => $dailyAbsentList
             ]);
 
             $cursor->addDay();
