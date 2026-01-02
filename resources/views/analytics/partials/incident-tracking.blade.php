@@ -8,9 +8,14 @@
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h4 class="text-danger mb-0">{{ count($incidentTracking['criticalIncidents']) }}</h4>
-                            <small class="text-muted">Critical Pending</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Critical Pending</h6>
+                                <h3 class="text-danger mb-0 fw-bold">{{ count($incidentTracking['criticalIncidents']) }}</h3>
+                            </div>
+                            <div class="text-danger" style="font-size: 2rem;">
+                                <i class="bi bi-exclamation-triangle"></i>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -36,25 +41,25 @@
                 </div>
                 @endif
 
-                <div class="table-responsive">
-                    <table class="table table-sm sortable-table">
-                        <thead>
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm sortable-table sticky-header">
+                        <thead class="table-light sticky-top">
                             <tr>
                                 <th data-sortable>Site Name</th>
-                                <th data-sortable data-type="number">Total</th>
-                                <th data-sortable data-type="number">Resolved</th>
-                                <th data-sortable data-type="number">Pending</th>
-                                <th data-sortable data-type="number">Resolution %</th>
+                                <th data-sortable data-type="number" class="text-center">Total</th>
+                                <th data-sortable data-type="number" class="text-center">Resolved</th>
+                                <th data-sortable data-type="number" class="text-center">Pending</th>
+                                <th data-sortable data-type="number" class="text-center">Resolution %</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($incidentTracking['incidentsBySite'] as $site)
                                 <tr>
                                     <td>{{ $site->site_name }}</td>
-                                    <td>{{ $site->incident_count }}</td>
-                                    <td><span class="badge bg-success">{{ $site->resolved_count }}</span></td>
-                                    <td><span class="badge bg-warning">{{ $site->pending_count }}</span></td>
-                                    <td>{{ $site->resolution_percentage }}%</td>
+                                    <td class="text-center">{{ $site->incident_count }}</td>
+                                    <td class="text-center"><span class="badge bg-success">{{ $site->resolved_count }}</span></td>
+                                    <td class="text-center"><span class="badge bg-warning">{{ $site->pending_count }}</span></td>
+                                    <td class="text-center">{{ $site->resolution_percentage }}%</td>
                                 </tr>
                             @empty
                                 <tr>
@@ -165,3 +170,23 @@ window.incidentTrackingData = {
 };
 </script>
 
+<style>
+    /* Enhanced scrollbar styling */
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+</style>

@@ -36,13 +36,13 @@
         </div>
     </div>
 </div>
-<form method="GET" class="d-flex gap-2 mb-3 align-items-end">
+<!-- <form method="GET" class="d-flex gap-2 mb-3 align-items-end">
     <div>
         <label class="small text-muted">Guard</label>
-        <select name="user_id" class="form-select form-select-sm">
+        <select name="user" class="form-select form-select-sm">
             <option value="">All Guards</option>
-            @foreach($users as $u)
-                <option value="{{ $u->id }}" {{ request('user_id') == $u->id ? 'selected' : '' }}>
+            @foreach($guardList as $u)
+                <option value="{{ $u->id }}" {{ request('user') == $u->id ? 'selected' : '' }}>
                     {{ $u->name }}
                 </option>
             @endforeach
@@ -54,7 +54,7 @@
     <button class="btn btn-sm btn-primary">
         Apply
     </button>
-</form>
+</form> -->
 
 
 {{-- ================= MAP AND SIDEBAR ================= --}}
@@ -183,7 +183,7 @@
                                 <button type="button" class="btn btn-sm btn-info text-white view-session-btn flex-fill" 
                                         data-session-id="{{ $s->session_id }}"
                                         style="font-size: 0.85rem;">
-                                    <i class="bi bi-eye"></i> View
+                                    <i class="bi bi-eye"></i> View Details
                                 </button>
                             </div>
                         </div>
@@ -210,9 +210,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="sessionModalBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
+            
         </div>
     </div>
 </div>
@@ -409,7 +407,7 @@ const sessionColor = document
                 const pathLayer = L.geoJSON(geoJson, {
                     style: {
                         color: sessionColor,
-                        weight: 5,  // Thicker lines like in image
+                        weight: 6,  // Thicker lines like in image
                         opacity: 0.9,
                         lineCap: 'round',
                         lineJoin: 'round'
@@ -427,9 +425,9 @@ const sessionColor = document
                         [{{ $s->start_lat }}, {{ $s->start_lng }}],
                         [{{ $s->end_lat }}, {{ $s->end_lng }}]
                     ], {
-                        color: '#28a745',  // Green color
+                        color: '',  // Green color
                         weight: 2,
-                        opacity: 0.6,
+                        opacity: 0,
                         dashArray: '5, 5'
                     });
                 @endif
@@ -505,7 +503,7 @@ function showAllPaths() {
     Object.values(sessionLayers).forEach(session => {
         session.layer.setStyle({
             color: session.color,
-            weight: 3,  // Thicker paths
+            weight: 5,  // Thicker paths
             opacity: 0.9
         });
         session.layer.addTo(map);
@@ -552,7 +550,7 @@ function showUserPaths(userId) {
         // Highlight paths with thicker, brighter lines
         session.layer.setStyle({
             color: session.color,
-            weight: 3,  // Thicker when highlighted
+            weight: 5,  // Thicker when highlighted
             opacity: 1
         });
         session.layer.addTo(map);
@@ -611,7 +609,7 @@ function zoomToSession(sessionId) {
         } else {
             s.layer.setStyle({
                 color: '#cccccc',
-                weight: 3,
+                weight: 5,
                 opacity: 0.2
             });
         }
@@ -755,23 +753,6 @@ function showEnhancedSessionDetails(session, sessionId) {
                     </div>
                 </div>
             </div>
-            
-            <!-- Action Buttons -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-primary" onclick="zoomToSession(${sessionId})">
-                            <i class="bi bi-zoom-in"></i> Zoom on Map
-                        </button>
-                        <button type="button" class="btn btn-success" onclick="playbackSession(${sessionId})">
-                            <i class="bi bi-play-circle"></i> Playback
-                        </button>
-                        <button type="button" class="btn btn-info" onclick="exportSessionData(${sessionId})">
-                            <i class="bi bi-download"></i> Export
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     `;
 
@@ -783,7 +764,7 @@ function showEnhancedSessionDetails(session, sessionId) {
     
     // Create new modal instance
     sessionDetailsModal = new bootstrap.Modal(modalEl, {
-        backdrop: 'static',  // Use static backdrop to prevent issues
+        backdrop: 'true',  // Use static backdrop to prevent issues
         keyboard: true,
         focus: true
     });
@@ -1108,6 +1089,10 @@ if (sortSelect) {
 </script>
 
 <style>
+
+    .modal-backdrop{
+        z-index: 1 !important;
+    }
     
 .session-card {
     transition: all 0.2s ease;

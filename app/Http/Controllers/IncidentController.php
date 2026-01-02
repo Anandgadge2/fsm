@@ -104,11 +104,8 @@ class IncidentController extends Controller
         $base = DB::table('patrol_logs')
             ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
             ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
-            ->leftJoinSub($siteGeofences, 'site_geofences', function ($join) {
-                $join->on('site_geofences.site_id', '=', 'patrol_sessions.site_id');
-            })
-            ->leftJoin('client_details', 'client_details.id', '=', 'site_geofences.client_id')
             ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
+            ->leftJoin('client_details', 'client_details.id', '=', 'site_details.client_id')
             ->whereIn('patrol_logs.type', [
                 'animal_sighting',
                 'water_source',
@@ -135,11 +132,11 @@ class IncidentController extends Controller
                 patrol_logs.created_at,
                 users.id as guard_id,
                 users.name as guard,
-                site_geofences.client_id as range_id,
-                COALESCE(client_details.name, site_geofences.client_id) as range_name,
+                site_details.client_id as range_id,
+                client_details.name as range_name,
                 patrol_sessions.site_id as beat_id,
-                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
-                site_geofences.site_name as compartment,
+                site_details.name as beat_name,
+                site_details.name as compartment,
                 patrol_sessions.session,
                 CASE
                     WHEN patrol_logs.type = "animal_mortality" THEN 5
@@ -161,11 +158,11 @@ class IncidentController extends Controller
                 patrol_logs.type,
                 users.id as guard_id,
                 users.name as guard,
-                site_geofences.client_id as range_id,
-                COALESCE(client_details.name, site_geofences.client_id) as range_name,
+                site_details.client_id as range_id,
+                client_details.name as range_name,
                 patrol_sessions.site_id as beat_id,
-                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
-                site_geofences.site_name as compartment,
+                site_details.name as beat_name,
+                site_details.name as compartment,
                 patrol_logs.notes,
                 patrol_logs.payload,
                 patrol_logs.created_at,
@@ -212,9 +209,8 @@ class IncidentController extends Controller
         $base = DB::table('patrol_logs')
             ->join('patrol_sessions', 'patrol_sessions.id', '=', 'patrol_logs.patrol_session_id')
             ->leftJoin('users', 'users.id', '=', 'patrol_sessions.user_id')
-            ->leftJoin('site_geofences', 'site_geofences.site_id', '=', 'patrol_sessions.site_id')
-            ->leftJoin('client_details', 'client_details.id', '=', 'site_geofences.client_id')
             ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
+            ->leftJoin('client_details', 'client_details.id', '=', 'site_details.client_id')
             ->whereIn('patrol_logs.type', [
                 'animal_sighting',
                 'water_source',
@@ -224,7 +220,7 @@ class IncidentController extends Controller
             ->whereNotNull('patrol_logs.lat')
             ->whereNotNull('patrol_logs.lng');
 
-        $this->applyCanonicalFilters($base, 'patrol_logs.created_at');
+        $this->applyCanonicalFilters($base, 'patrol_logs.created_at', 'patrol_sessions.site_id');
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $base->whereBetween('patrol_logs.created_at', [
@@ -245,11 +241,11 @@ class IncidentController extends Controller
                 patrol_logs.created_at,
                 users.name as guard,
                 users.contact as guard_contact,
-                site_geofences.client_id as range_id,
-                COALESCE(client_details.name, site_geofences.client_id) as range_name,
+                site_details.client_id as range_id,
+                client_details.name as range_name,
                 patrol_sessions.site_id as beat_id,
-                COALESCE(site_details.name, patrol_sessions.site_id) as beat_name,
-                site_geofences.site_name as compartment,
+                site_details.name as beat_name,
+                site_details.name as compartment,
                 patrol_sessions.session,
                 patrol_sessions.type as patrol_type,
                 (6371 * acos(cos(radians(?)) 

@@ -14,36 +14,150 @@ class ReportController extends Controller
     use FilterDataTrait;
 
     /* ================= MONTHLY REPORT ================= */
-   public function monthly(Request $request)
-{
-    $base = DB::table('patrol_sessions')
-        ->whereNotNull('ended_at');
+    /* ================= MONTHLY REPORT (Unified Hub) ================= */
+    public function monthly(Request $request)
+    {
+        $reportType = $request->input('report_type');
+        $export = $request->input('export');
+        $data = null;
+        $title = '';
+        $summary = null;
 
-    if ($request->filled('year')) {
-        $base->whereYear('started_at', $request->year);
+        // Fetch Filter Data Early
+        $ranges = DB::table('client_details')->orderBy('name')->pluck('name', 'id');
+        $beats  = DB::table('site_details')->orderBy('name')->pluck('name', 'id');
+        $users  = DB::table('users')->where('isActive', 1)->orderBy('name')->pluck('name', 'id');
+
+        if ($reportType) {
+            if ($reportType === 'attendance') {
+                $title = 'Attendance Report';
+                
+                // Base Query with Filters
+                $baseQuery = DB::table('attendance');
+                
+                $this->applyCanonicalFilters($baseQuery, 'attendance.timestamp', 'attendance.site_id');
+                
+                if ($request->filled('start_date')) {
+                    $baseQuery->whereDate('attendance.date', '>=', $request->start_date);
+                }
+                if ($request->filled('end_date')) {
+                    $baseQuery->whereDate('attendance.date', '<=', $request->end_date);
+                }
+
+                // Detailed Logs
+                $data = (clone $baseQuery)
+                    ->select(
+                        'attendance.name as guard_name',
+                        'attendance.site_name',
+                        'attendance.client_name',
+                        'attendance.date',
+                        'attendance.entry_time',
+                        'attendance.exit_time',
+                        'attendance.duration_for_calc as duration',
+                        'attendance.status'
+                    )
+                    ->orderByDesc('attendance.date')
+                    ->limit(300) // Reduced limit for PDF performance
+                    ->get();
+
+                // Summary Aggregation
+                $summary = (clone $baseQuery)
+                    ->select(
+                        'name as guard_name',
+                        DB::raw('COUNT(*) as total_logs'),
+                        DB::raw('SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as present_days'),
+                        DB::raw('SUM(CASE WHEN status != 1 THEN 1 ELSE 0 END) as absent_days') // Assuming non-1 is absent/leave
+                    )
+                    ->groupBy('name')
+                    ->orderByDesc('present_days')
+                    ->limit(100) // Limit summary to top 100 to prevent PDF timeout
+                    ->get();
+                
+            } elseif ($reportType === 'patrol') {
+                $title = 'Patrol Report';
+                $query = DB::table('patrol_sessions')
+                    ->join('users', 'users.id', '=', 'patrol_sessions.user_id')
+                    ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
+                    ->select(
+                        'patrol_sessions.session',
+                        'users.name as guard_name',
+                        'site_details.name as site_name',
+                        'patrol_sessions.started_at',
+                        'patrol_sessions.ended_at',
+                        'patrol_sessions.distance'
+                    );
+
+                 if ($request->filled('range')) {
+                     $query->where('site_details.client_id', $request->range);
+                 } elseif ($request->filled('client_id')) {
+                     $query->where('site_details.client_id', $request->client_id);
+                 }
+
+                 $this->applyCanonicalFilters($query, 'patrol_sessions.started_at', 'patrol_sessions.site_id');
+
+                 if ($request->filled('start_date')) {
+                     $query->whereDate('patrol_sessions.started_at', '>=', $request->start_date);
+                 }
+                 if ($request->filled('end_date')) {
+                     $query->whereDate('patrol_sessions.started_at', '<=', $request->end_date);
+                 }
+                 
+                 $data = $query->orderByDesc('patrol_sessions.started_at')->limit(300)->get();
+
+            } elseif ($reportType === 'night_patrol') {
+                $title = 'Night Patrolling Report';
+                $query = DB::table('patrol_sessions')
+                    ->join('users', 'users.id', '=', 'patrol_sessions.user_id')
+                    ->leftJoin('site_details', 'site_details.id', '=', 'patrol_sessions.site_id')
+                    ->where(function ($q) {
+                        $q->whereTime('patrol_sessions.started_at', '>=', '18:00:00')
+                          ->orWhereTime('patrol_sessions.started_at', '<', '06:00:00');
+                    })
+                    ->select(
+                        'patrol_sessions.session',
+                        'users.name as guard_name',
+                        'site_details.name as site_name',
+                        'patrol_sessions.started_at',
+                        'patrol_sessions.ended_at',
+                        'patrol_sessions.distance'
+                    );
+
+                 if ($request->filled('range')) {
+                     $query->where('site_details.client_id', $request->range);
+                 }
+
+                 $this->applyCanonicalFilters($query, 'patrol_sessions.started_at', 'patrol_sessions.site_id');
+
+                 if ($request->filled('start_date')) {
+                     $query->whereDate('patrol_sessions.started_at', '>=', $request->start_date);
+                 }
+                 if ($request->filled('end_date')) {
+                     $query->whereDate('patrol_sessions.started_at', '<=', $request->end_date);
+                 }
+
+                 $data = $query->orderByDesc('patrol_sessions.started_at')->limit(300)->get();
+            }
+        }
+
+        if ($export === 'pdf' && $data) {
+            $pdf = Pdf::loadView('reports.pdf_export', [
+                // Ensure units are processed in view or processed here.
+                // We'll process formatting in View for flexibility.
+                'data' => $data,
+                'summary' => $summary,
+                'title' => $title,
+                'type' => $reportType,
+                'filters' => [
+                    'Date Range' => ($request->start_date ?? 'All') . ' to ' . ($request->end_date ?? 'All'),
+                    'Range' => $request->range ? 'Specific Range' : 'All',
+                    'Generated On' => now()->format('d M Y h:i A') // Fixed format
+                ]
+            ]);
+            return $pdf->download(\Illuminate\Support\Str::slug($title) . '_' . now()->format('Ymd') . '.pdf');
+        }
+
+        return view('reports.monthly', compact('data', 'reportType', 'title', 'summary', 'ranges', 'beats', 'users'));
     }
-
-    $monthly = (clone $base)
-        ->selectRaw('
-            MONTH(started_at) as month,
-            COUNT(*) as sessions,
-            COUNT(DISTINCT user_id) as guards,
-            ROUND(SUM(distance)/1000,2) as distance,
-            ROUND(AVG(distance)/1000,2) as avg_distance
-        ')
-        ->groupByRaw('MONTH(started_at)')
-        ->orderBy('month')
-        ->get();
-
-    $kpis = [
-        'total_sessions'   => (clone $base)->count(),
-        'total_guards'     => (clone $base)->distinct('user_id')->count('user_id'),
-        'total_distance'   => round((clone $base)->sum('distance') / 1000, 2),
-        'avg_per_session'  => round((clone $base)->avg('distance') / 1000, 2),
-    ];
-
-    return view('reports.monthly', compact('monthly', 'kpis'));
-}
 
 
   /* ================= FOOT REPORT ================= */

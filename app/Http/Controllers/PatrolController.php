@@ -649,7 +649,7 @@ public function footDistanceByGuard(Request $request)
     // ->select('id', 'name')
     // ->orderBy('name')
     // ->get();
-$users = (clone $base)
+$mapUsers = (clone $base)
 ->reorder()
     ->select(
         'users.id',
@@ -687,7 +687,8 @@ $users = (clone $base)
 
         return view('patrol.kml-view', array_merge(
             $this->filterData(),
-            compact('sessions', 'users', 'stats', 'geofences')
+            compact('sessions', 'stats', 'geofences'),
+            ['guardList' => $mapUsers]
         ));
     }
 

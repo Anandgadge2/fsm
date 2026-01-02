@@ -15,16 +15,16 @@
                             <thead>
                                 <tr>
                                     <th>Guard Name</th>
-                                    <th>Late Count</th>
-                                    <th>Avg Late (min)</th>
+                                    <th class="text-center">Late Count</th>
+                                    <th class="text-center">Avg Late (min)</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($attendanceAnalytics['lateAttendance'] as $late)
                                 <tr>
                                     <td>{{ $late->name }}</td>
-                                    <td><span class="badge bg-warning">{{ $late->late_count }}</span></td>
-                                    <td>{{ number_format($late->avg_late_minutes, 1) }} min</td>
+                                    <td class="text-center"><span class="badge bg-warning">{{ $late->late_count }}</span></td>
+                                    <td class="text-center">{{ number_format($late->avg_late_minutes, 1) }} min</td>
                                 </tr>
                                 @endforeach
                             </tbody>
@@ -47,15 +47,15 @@
                     <table class="table table-sm mb-3">
                         <thead>
                             <tr>
-                                <th>Hour</th>
-                                <th>Count</th>
+                                <th class="text-center">Hour</th>
+                                <th class="text-center">Count</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($timePatterns['peakHours'] as $peak)
                             <tr>
-                                <td>{{ $peak->hour }}:00</td>
-                                <td>{{ $peak->count }}</td>
+                                <td class="text-center">{{ $peak->hour }}:00</td>
+                                <td class="text-center">{{ $peak->count }}</td>
                             </tr>
                             @endforeach
                         </tbody>

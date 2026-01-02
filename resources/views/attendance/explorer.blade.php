@@ -7,10 +7,18 @@
     {{-- HEADER --}}
     <div class="explorer-header">
         <h4>Attendance Explorer</h4>
-
+        <div>
+            @if(isset($startDate) && isset($endDate))
+                <span class="badge bg-light text-dark border">
+                    {{ $startDate->format('d M Y') }} - {{ $endDate->format('d M Y') }}
+                </span>
+            @endif
+        </div>
     </div>
 
-    <div class="explorer-layout">
+  
+
+    <div class="explorer-layout mt-3">
 
         {{-- ================= TABLE ONLY SCROLLS ================= --}}
         <div class="dot-table-wrapper">
@@ -21,11 +29,13 @@
                             <th data-sortable>User</th>
                             <th data-sortable>Range</th>
                             <th data-sortable>Beat</th>
-                            <th data-sortable>Compartment</th>
                             <th data-sortable>Total</th>
-                            @for($d = 1; $d <= $daysInMonth; $d++)
-                                <th>{{ $d }}</th>
-                            @endfor
+                            @foreach($dates as $dt)
+                                <th title="{{ $dt->format('Y-m-d') }}">
+                                    {{ $dt->format('d') }}<br>
+                                    <small style="font-size:9px; font-weight:400; color:#888;">{{ $dt->format('M') }}</small>
+                                </th>
+                            @endforeach
                         </tr>
                     </thead>
 
@@ -42,18 +52,25 @@
 
                            <td>{{ $data['meta']['range'] ?? '-' }}</td>
                            <td>{{ $data['meta']['beat'] ?? '-' }}</td>
-                           <td>{{ $data['meta']['compartment'] ?? '-' }}</td>
+                          
 
 
                             <td class="fw-semibold">
                                 {{ $data['summary']['present'] }} / {{ $data['summary']['total'] }}
                             </td>
 
-                            @for($d = 1; $d <= $daysInMonth; $d++)
+                            {{-- Iterate over dates to match header --}}
+                            @foreach($dates as $dt)
+                                @php 
+                                    $dStr = $dt->toDateString();
+                                    $isPresent = $data['days'][$dStr]['present'] ?? false;
+                                @endphp
                                 <td>
-                                    <span class="dot {{ $data['days'][$d]['present'] ? 'present' : 'absent' }}"></span>
+                                    <span class="dot {{ $isPresent ? 'present' : 'absent' }}" 
+                                          title="{{ $dStr }}: {{ $isPresent ? 'Present' : 'Absent' }}">
+                                    </span>
                                 </td>
-                            @endfor
+                            @endforeach
                         </tr>
                     @endforeach
                     </tbody>
@@ -79,8 +96,8 @@
             </div>
 
             <div class="kpi kpi-grey">
-                <p>Total Days</p>
-                <h2>{{ $totalDays }}</h2>
+                <p>Total Guard-Days</p>
+                <h2>{{ $totalDays ?? ($totalPresent + $totalAbsent) }}</h2>
             </div>
         </div>
 

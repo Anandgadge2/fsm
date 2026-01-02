@@ -29,19 +29,19 @@
             <thead class="table-light">
             <tr>
                 <th data-sortable>Type</th>
-                <th data-sortable data-type="number">Severity</th>
+                <th data-sortable data-type="number" class="text-center">Severity</th>
                 <th data-sortable>Guard</th>
                 <th data-sortable >Range</th>
                 <th data-sortable >Beat</th>
                 <th data-sortable>Compartment</th>
-                <th data-sortable>Date</th>
+                <th data-sortable class="text-center">Date</th>
             </tr>
             </thead>
             <tbody>
             @foreach($latestTop10 as $i)
                 <tr onclick="openIncident({{ json_encode($i) }})" style="cursor:pointer">
                     <td><span class="badge bg-secondary">{{ $i->type }}</span></td>
-                    <td>
+                    <td class="text-center">
                         <span class="badge bg-{{ severityBadge($i->severity) }}">
                             {{ $i->severity }}
                         </span>
@@ -58,7 +58,7 @@
                     <td>{{ $i->range_name ?? $i->range_id ?? '—' }}</td>
                     <td>{{ $i->beat_name ?? $i->beat_id ?? '—' }}</td>
                     <td class="fw-semibold">{{ $i->compartment ?? '—' }}</td>
-                    <td>{{ \Carbon\Carbon::parse($i->created_at)->format('d M Y, h:i A') }}</td>
+                    <td class="text-center">{{ \Carbon\Carbon::parse($i->created_at)->format('d M Y, h:i A') }}</td>
                 </tr>
             @endforeach
             </tbody>
@@ -91,24 +91,25 @@
 <div class="card">
     <div class="card-header fw-semibold">All Incidents</div>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 sortable-table">
-             <thead class="table-light">
+    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0 sortable-table sticky-header">
+             <thead class="table-light sticky-top">
             <tr>
                 <th data-sortable>Type</th>
-                <th data-sortable data-type="number">Severity</th>
+                <th data-sortable data-type="number" class="text-center">Severity</th>
                 <th data-sortable>Guard</th>
                 <th data-sortable >Range</th>
                 <th data-sortable >Beat</th>
                 <th data-sortable>Compartment</th>
-                <th data-sortable>Date</th>
+                <th data-sortable>Session</th>
+                <th data-sortable class="text-center" style="min-width: 140px;">Date</th>
             </tr>
             </thead>
             <tbody>
             @foreach($incidents as $i)
                 <tr onclick="openIncident({{ json_encode($i) }})" style="cursor:pointer">
                     <td><span class="badge bg-secondary">{{ $i->type }}</span></td>
-                    <td>
+                    <td class="text-center">
                         <span class="badge bg-{{ severityBadge($i->severity) }}">
                             {{ $i->severity }}
                         </span>
@@ -126,7 +127,7 @@
                     <td>{{ $i->beat_name ?? $i->beat_id ?? '—' }}</td>
                     <td class="fw-semibold">{{ $i->compartment ?? '—' }}</td>
                     <td>{{ $i->session ?? '—' }}</td>
-                    <td>{{ \Carbon\Carbon::parse($i->created_at)->format('d M Y, h:i A') }}</td>
+                    <td class="text-center">{{ \Carbon\Carbon::parse($i->created_at)->format('d M Y, h:i A') }}</td>
                 </tr>
             @endforeach
             </tbody>
@@ -236,6 +237,28 @@ new Chart(document.getElementById('sessionChart'), {
     right:14px;
     font-size:22px;
     cursor:pointer;
+}
+
+/* Scrollbar & Sticky Header Styling */
+.table-responsive::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #b3b3b3;
+}
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: #f8f9fa; /* Ensure header has background so content doesn't show through */
 }
 </style>
 @endpush

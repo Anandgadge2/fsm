@@ -8,15 +8,25 @@
             <div class="card-body">
                 <div class="row mb-3">
                     <div class="col-6">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h4 class="text-success mb-0">{{ $patrolAnalytics['footPatrols'] }}</h4>
-                            <small class="text-muted">Foot Patrols</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Foot Patrols</h6>
+                                <h4 class="text-success mb-0 fw-bold">{{ $patrolAnalytics['footPatrols'] }}</h4>
+                            </div>
+                            <div class="text-success opacity-50" style="font-size: 1.5rem;">
+                                <i class="bi bi-cursor-fill"></i>
+                            </div>
                         </div>
                     </div>
                     <div class="col-6">
-                        <div class="text-center p-3 bg-light rounded">
-                            <h4 class="text-info mb-0">{{ $patrolAnalytics['nightPatrols'] }}</h4>
-                            <small class="text-muted">Night Patrols</small>
+                        <div class="p-3 border rounded bg-white h-100 d-flex justify-content-between align-items-center shadow-sm">
+                            <div>
+                                <h6 class="text-muted text-uppercase small mb-1">Night Patrols</h6>
+                                <h4 class="text-info mb-0 fw-bold">{{ $patrolAnalytics['nightPatrols'] }}</h4>
+                            </div>
+                            <div class="text-info opacity-50" style="font-size: 1.5rem;">
+                                <i class="bi bi-moon-stars-fill"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
